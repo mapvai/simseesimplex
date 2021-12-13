@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>     /* abs */
-
+#include <iostream>
+#include <string>
+using namespace std;
 
 #include "tsimplexgpus.h"
 
@@ -15,96 +17,125 @@ const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Doubl
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 
+void resolver_cpu(TSimplexGPUs &simplex) ;
+int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
+void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
+bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
+void actualizo_iitop(TSimplexGPUs &smp, int k);
+void actualizo_iileft(TSimplexGPUs &smp, int k) ;
+void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2);
+void intercambioFilas(TSimplexGPUs &smp, int k1, int k2);
+int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta);
+bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_VariablesLiberadas);
+int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes);
+bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma);
+int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int IgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles);
+void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila);
+int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles);
+int locate_zpos(TSimplexGPUs &smp, int kfila_z);
+void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xfantasma_Fila); // Esta funcion es interna, no se necesita declarar aca?
+int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt);
+bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q);
+int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti);
+bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq);
+int darpaso(TSimplexGPUs &smp);
+
+
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
-	int NEnteras;
-	int NVariables;
-	int NRestricciones;
-	int cnt_varfijas;
-	int cnt_RestriccionesRedundantes;
+	//int NEnteras;
+	//int NVariables;
+	//int NRestricciones;
+	//int cnt_varfijas;
+	//int cnt_RestriccionesRedundantes;
 	
 	//TSimplexVars smp_var_arr = (SimplexVars*)malloc(NTrayectorias*sizeof(SimplexVars));
 	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		resolver_cpu(&simplex_array[kTrayectoria]); //,  &smp_var_arr[kTrayectoria]); 
+		resolver_cpu(simplex_array[kTrayectoria]); //,  &smp_var_arr[kTrayectoria]); 
 	}
 	
 }
 
 
-void resolver_cpu(TDAOfSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
+void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
 	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
 	int cnt_varfijas = 0; // Cantidad de variables fijadas
+	int cnt_RestrInfactibles = 0;
+	int cnt_VariablesLiberadas = 0;
 	string mensajeDeError;
 
-	fijarCajasLaminares(simplex, cnt_varfijas);
+	fijarCajasLaminares(simplex, simplex.cnt_varfijas);
 
 	// Fijamos las variables que se hayan declarado como constantes.
-	if (!fijarVariables(simplex, cnt_varfijas, cnt_columnasFijadas)) {
-		mensajeDeError = 'PROBLEMA INFACTIBLE - No fijar las variable Fijas.';
+	if (!fijarVariables(simplex, simplex.cnt_varfijas, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
+		mensajeDeError = "PROBLEMA INFACTIBLE - No fijar las variable Fijas.";
 		result = -32;
 		return;
 	}
 
-	if (!enfilarVariablesLibres(simplex, cnt_columnasFijadas, cnt_RestriccionesRedundantes, cnt_VariablesLiberadas)) {
-		mensajeDeError = 'No fue posible conmutar a filas todas las variables libres';
+	if (!enfilarVariablesLibres(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, cnt_VariablesLiberadas)) {
+		mensajeDeError = "No fue posible conmutar a filas todas las variables libres";
 		result = -33;
 		return;
 	}
 
-	if (resolverIgualdades(simplex, cnt_columnasFijadas, cnt_varfijas, cnt_RestriccionesRedundantes) != 1) {
-		mensajeDeError = 'PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.';
+	if (resolverIgualdades(simplex, cnt_columnasFijadas, cnt_varfijas, simplex.cnt_RestriccionesRedundantes) != 1) {
+		mensajeDeError = "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.";
 		result = -31;
 		return;
 	}
 
 	lbl_inicio:
 
-	reordenarPorFactibilidad(simplex, cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
+	reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
 
 	res = 1;
 	while (cnt_RestrInfactibles > 0) {
-    res = pasoBuscarFactible(simplex, cnt_RestrInfactibles);
+		res = pasoBuscarFactible(simplex, cnt_RestrInfactibles);
 
-    switch (res) {
-		case 0: 
-			if (cnt_RestrInfactibles > 0) {
-				mensajeDeError := 'PROBLEMA INFACTIBLE - Buscando factibilidad';
-				result = -10;
+		switch (res) {
+			case 0: 
+				if (cnt_RestrInfactibles > 0) {
+				mensajeDeError = "PROBLEMA INFACTIBLE - Buscando factibilidad";
+					result = -10;
+					return;
+				}
+				break;
+			case  -1:
+				mensajeDeError = "NO encontramos pivote bueno - Buscando Factibilidad";
+				result = -11;
 				return;
-			}
-			break;
-		case  -1:
-			mensajeDeError = 'NO encontramos pivote bueno - Buscando Factibilidad';
-			result = -11;
-			return;
-		case -2:
-			mensajeDeError = '???cnt_infactibles= 0 - Buscando Factibilidad';
-			result = -12;
-			return;
+			case -2:
+				mensajeDeError = "???cnt_infactibles= 0 - Buscando Factibilidad";
+				result = -12;
+				return;
+		}
 	}
 
 	while (res == 1) {
 		res = darpaso(simplex);
 		if (res == -1) {
-			mensajeDeError = 'Error -- NO encontramos pivote bueno dando paso';
+			mensajeDeError = "Error -- NO encontramos pivote bueno dando paso";
 			result = -21;
 			return;
 		}
 	}
-  
+	  
 	if (res == 2) {
 		goto lbl_inicio;
 	}
-	
+		
 	result = res;
 }
 
 
 // Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
 // retorna la cantidad de cajas fijadas.
-int fijarCajasLaminares(TDAOfSimplexGPUs &smp, int &cnt_varfijas) {
+int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 	int res = 0;
 	
 	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1 
@@ -124,10 +155,9 @@ int fijarCajasLaminares(TDAOfSimplexGPUs &smp, int &cnt_varfijas) {
 }
 
 
-void posicionarPrimeraLibre(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) {
-    while (cnt_fijadas < cnt_varfijas) &&
-      (((smp.top[kPrimeraLibre] < 0) && (abs(smp.flg_x[-smp.top[kPrimeraLibre]]) == 2)) or
-        ((smp.top[kPrimeraLibre] > 0) && (abs(smp.flg_y[smp.top[kPrimeraLibre]]) == 2))) {
+void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) {
+    while ((cnt_fijadas < cnt_varfijas) && 
+		(((smp.top[kPrimeraLibre] < 0) && (abs(smp.flg_x[-smp.top[kPrimeraLibre]]) == 2)) || ((smp.top[kPrimeraLibre] > 0) && (abs(smp.flg_y[smp.top[kPrimeraLibre]]) == 2)))) {
 		if (smp.top[kPrimeraLibre] < 0) {
 			cnt_fijadas++;
 		}	
@@ -137,7 +167,7 @@ void posicionarPrimeraLibre(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_fi
 }
 
 
-bool fijarVariables(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas) {
+bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 
 	int kColumnas, mejorColumnaParaCambiarFila, kFor, kFilaAFijar, cnt_fijadas, kPrimeraLibre;
 	double mejorAkFilai;
@@ -149,7 +179,7 @@ bool fijarVariables(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFi
 		kColumnas = 0; // MAP: Antes 1, pero cambimos que los vectores esten indexados desde 1 a 0
 		
 		while ((cnt_fijadas < cnt_varfijas) && (kColumnas <= kPrimeraLibre)) {
-			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_columnasFijadas);
+			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_fijadas, cnt_columnasFijadas, kPrimeraLibre);
 			//Busco en columnas
 			if ((cnt_fijadas < cnt_varfijas) && (kColumnas <= kPrimeraLibre)) {
 				buscando = true;
@@ -157,9 +187,9 @@ bool fijarVariables(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFi
 					
 					// MAP: Aca grego -1 a flg_x[-top[kColumnas] -1] para obtener el indice que empieza en 0 y top left son 2 vectores indexados en 0 pero que contienen numeros comenzados en 1, por lo tanto el indice real es top[indice] - 1,
 					// esto lo voy a tener que hacer a lo largo y ancho del algoritmo
-					if ((smp.top[kColumnas]) < 0) && (abs(smp.flg_x[-smp.top[kColumnas] - 1]) == 2) ) { 
-						//es una x fija
-						buscando = false
+					if ((smp.top[kColumnas] < 0) && (abs(smp.flg_x[-smp.top[kColumnas] - 1]) == 2)) { 
+						// Es una x fija
+						buscando = false;
 					} else {
 						kColumnas++;
 					}
@@ -178,7 +208,7 @@ bool fijarVariables(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFi
 		kFilaAFijar = cnt_RestriccionesRedundantes - 1; // MAP: Agreo -1
 		while (cnt_fijadas < cnt_varfijas) {
 		
-			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_columnasFijadas);
+			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_fijadas, cnt_columnasFijadas, kPrimeraLibre);;
 			if (cnt_fijadas < cnt_varfijas) {
 		 
 				//Busco en filas
@@ -229,7 +259,7 @@ bool fijarVariables(TDAOfSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFi
 }
 
 
-bool intercambiar(TDAOfSimplexGPUs &smp, int kfil, int jcol) {
+bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 
 	double m, piv, invPiv;
 	int k, j;
@@ -299,7 +329,7 @@ bool intercambiar(TDAOfSimplexGPUs &smp, int kfil, int jcol) {
  }
 
 // MAP: Agrego los -1 +1 por el cambio de indices CHEQUEAR QUE ES CORRECTO
-void actualizo_iitop(TDAOfSimplexGPUs &smp, int k) {
+void actualizo_iitop(TSimplexGPUs &smp, int k) {
 	// actualizo los indices iix e iiy
 	if (smp.top[k] < 0) {
 		smp.iix[-smp.top[k] - 1] = k + 1;
@@ -309,7 +339,7 @@ void actualizo_iitop(TDAOfSimplexGPUs &smp, int k) {
 }
 
 // MAP: Agrego los -1 +1 por el cambio de indices CHEQUEAR QUE ES CORRECTO
-void actualizo_iileft(TDAOfSimplexGPUs &smp, int k) {
+void actualizo_iileft(TSimplexGPUs &smp, int k) {
 	// actualizo los indices iix e iiy
 	if (smp.left[k] > 0) {
 		smp.iiy[smp.left[k] - 1]  = k + 1; 
@@ -318,7 +348,7 @@ void actualizo_iileft(TDAOfSimplexGPUs &smp, int k) {
 	}
 }
 
-void intercambioColumnas(TDAOfSimplexGPUs &smp, int j1, int j2) {
+void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 
 	int k;
 	double m;
@@ -337,7 +367,7 @@ void intercambioColumnas(TDAOfSimplexGPUs &smp, int j1, int j2) {
 	actualizo_iitop(smp, j2);
 }
 
-void intercambioFilas(TDAOfSimplexGPUs &smp, int k1, int k2) {
+void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
   
 	int j;
 	double m;
@@ -360,7 +390,7 @@ void intercambioFilas(TDAOfSimplexGPUs &smp, int k1, int k2) {
  // Atención esto funciona porque suponemos que el Simplex está en su estado Natural.
  // a lo sumo se conmutaron algunas columnas para fijar variables.
  // MAP: se usa solo dentro de enfilarVariablesLibres
- int buscarMejorPivoteEnCol(TDAOfSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta) {
+int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta) {
 	
 	double a;
 	int iFil, res;
@@ -377,7 +407,7 @@ void intercambioFilas(TDAOfSimplexGPUs &smp, int k1, int k2) {
  }
 
 
-bool enfilarVariablesLibres(TDAOfSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_VariablesLiberadas) {
+bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_VariablesLiberadas) {
 
 	int jVar, iFil, jCol;
 
@@ -402,7 +432,7 @@ bool enfilarVariablesLibres(TDAOfSimplexGPUs &smp, int cnt_columnasFijadas, int 
 }
 
 
-int resolverIgualdades(TDAOfSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes) {
+int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes) {
 	int res, cnt_acomodadas, ifila, icolumna, 
 		nIgualdadesResueltas, nIgualdadesAResolver, 
 		iFilaLibre, iFilaAcomodando;
@@ -485,7 +515,7 @@ int resolverIgualdades(TDAOfSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_
 				ifila++;
 			}
 			if (nIgualdadesResueltas < nIgualdadesAResolver) {
-				mensajeDeError = 'PROBLEMA INFACTIBLE - Resolviendo igualdades.';
+				mensajeDeError = "PROBLEMA INFACTIBLE - Resolviendo igualdades.";
 				res = -13;
 				break;
 			} else {
@@ -501,7 +531,7 @@ int resolverIgualdades(TDAOfSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_
 
 
 // Indica si la restricción en kfila esta siendo cumplida
-bool filaEsFactible(TDAOfSimplexGPUs &smp, int kfila, bool &fantasma) {
+bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
 	
 	int ix;
 	// if e(kfila, nc) < -CasiCero_Simplex then
@@ -529,7 +559,7 @@ bool filaEsFactible(TDAOfSimplexGPUs &smp, int kfila, bool &fantasma) {
 }
 
 
-int pasoBuscarFactibleIgualdad4(TDAOfSimplexGPUs &smp, int IgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
+int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int IgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 
 	int iFila, iColumna, columnasLibres,
 		filaPiv, colPiv;
@@ -598,7 +628,7 @@ int pasoBuscarFactibleIgualdad4(TDAOfSimplexGPUs &smp, int IgualdadesNoResueltas
 	}	
 }
 
-int reordenarPorFactibilidad(TDAOfSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles) {
+int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles) {
 
 	int kfil, ix;
 	double rval;
@@ -659,7 +689,7 @@ int reordenarPorFactibilidad(TDAOfSimplexGPUs &smp, int cnt_RestriccionesRedunda
 	return cnt_RestrInfactibles;
 }
 
-void cambiar_borde_de_caja(TDAOfSimplexGPUs &smp, int k_fila) {
+void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila) {
 	int ix, k;
 	/*
 		Realizamos el cambio de variable x'= x_sup - x para que la restricción
@@ -684,7 +714,7 @@ void cambiar_borde_de_caja(TDAOfSimplexGPUs &smp, int k_fila) {
 }
 
 
-int pasoBuscarFactible(TDAOfSimplexGPUs &smp, int &cnt_RestrInfactibles) {
+int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles) {
 	
 	int pFilaOpt, ppiv, qpiv, ix, res;
 	double rval;
@@ -770,15 +800,10 @@ int pasoBuscarFactible(TDAOfSimplexGPUs &smp, int &cnt_RestrInfactibles) {
 	return res;
 }
 
-// Revisa si puede decrementar la cantidad de restricciones infactibles y lo hace en caso de poder hacerlo
-// MAP: Eso de revisa se ve que me lo debe, declaro en el nombre del padre de hijo y del espiritu santo este procedimeinto como procedimiento al p... y sustituyo las llamadas por cnt_RestrInfactibles--
-void decCnt_RestrInfactibles(int &cnt_RestrInfactibles) {
-	cnt_RestrInfactibles--;
-}
 
 // Buscamos la columna que en la ultima fila (fila z) tenga el valor positivo mas grande retorna el número de columna si lo encontro, -1 si son todos < 0
 // Este paso se da en el Simplex para minimizar, en el de maximizar busca el menos negativo
-int locate_zpos(TDAOfSimplexGPUs &smp, int kfila_z) {
+int locate_zpos(TSimplexGPUs &smp, int kfila_z) {
 	int j, ires;
 	double maxval;
 	ires = -1;
@@ -794,7 +819,7 @@ int locate_zpos(TDAOfSimplexGPUs &smp, int kfila_z) {
 
 
 // MAP: Este procedimeinto es interno al procedimiento mejorpivote. ESTE PROCEDIMIENTO HABRIA QUE ELIMINARLO Y PEGAR EL CODIGO DIRECTO EN mejorpivote
-void capturarElMejor(int i, double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xfantasma_Fila) {
+void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xfantasma_Fila) {
   a_iq_DelMejor = a_iq;
   a_it_DelMejor = a_it;
   p = i;
@@ -803,7 +828,7 @@ void capturarElMejor(int i, double &a_iq_DelMejor, double &a_it_DelMejor, int &p
 }
 
 
-int mejorpivote(TDAOfSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt) {
+int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt) {
   
 	int i, p, ix;
 	double a_iq, a_it, abs_a_pq,
@@ -901,14 +926,14 @@ int mejorpivote(TDAOfSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool
 			//Ademas bi/aiq y b_max/a_max tienen el mismo signo =>
 			//bi/aiq > b_max/a_max <=> bi * a_max > b_max * aiq
 			if (p < 0) { // Es el primer candidato
-				capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+				capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 				
 			} else if (( a_it_DelMejor * a_iq) < ( a_it * a_iq_DelMejor ))  {
-				capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+				capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 				
 			} else if (( a_it * a_iq_DelMejor ) == ( a_it_DelMejor * a_iq)) {
 				if (abs_a_pq > abs_a_pq_DelMejor) {
-					capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+					capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 				}
 			}
 		}
@@ -929,16 +954,16 @@ int mejorpivote(TDAOfSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool
 				a_iq = -smp.mat[kmax][q];
 				a_it = smp.x_sup[ix - 1] - smp.mat[kmax][smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				abs_a_pq = abs(a_iq);
-				assert(a_iq < 0, 'aiq >= 0 en tsimplex.mejorpivote');
+				static_assert(a_iq < 0, "aiq >= 0 en tsimplex.mejorpivote");
 				//      b_:= x_sup.pv[ix] - e(kmax, nc);
 				xfantasma_Fila = true;
 				if (p < 0) { // es el primer candidato
-					capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+					capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 				} else if (( a_it * a_iq_DelMejor ) > ( a_it_DelMejor * a_iq)) {
-					capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+					capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 				} else if (( a_it * a_iq_DelMejor ) == ( a_it_DelMejor * a_iq)) {
 					if (abs_a_pq > abs_a_pq_DelMejor) {
-						capturarElMejor(i, a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
+						capturarElMejor(a_iq_DelMejor, a_it_DelMejor, p, filaFantasma, colFantasma, a_iq, a_it, i, xfantasma_Fila);
 					}
 				}
 			}
@@ -969,7 +994,7 @@ int mejorpivote(TDAOfSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool
 }
 
 
-bool cambio_var_cota_sup_en_columna(TDAOfSimplexGPUs &smp, int q) {
+bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q) {
 
 	int ix, kfil;
 	double xsup;
@@ -1005,8 +1030,7 @@ bool cambio_var_cota_sup_en_columna(TDAOfSimplexGPUs &smp, int q) {
 }
 
 
-
-int locate_qOK(TDAOfSimplexGPUs &smp, int p, int jhasta, int jti) {
+int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti) {
 	int mejorq, q;
 	double max_apq, apq;
 
@@ -1032,7 +1056,7 @@ El valor retornado apq, es e(p,q) y puede usarse para
 elegir el q que devuelva el valor más grande para disminuir los
 errores numéricos.
 */
-bool test_qOK(TDAOfSimplexGPUs &smp, int p, int q, int jti, double &apq) {
+bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq) {
 	int k, ix;
 	double alfa_p, akq,
 		nuevo_ti;
@@ -1081,8 +1105,7 @@ bool test_qOK(TDAOfSimplexGPUs &smp, int p, int q, int jti, double &apq) {
 }
 
 
-
-int darpaso(TDAOfSimplexGPUs &smp) {
+int darpaso(TSimplexGPUs &smp) {
 
 	int ppiv, qpiv,
 		res;
@@ -1108,7 +1131,7 @@ int darpaso(TDAOfSimplexGPUs &smp) {
 			}
 			res = 1;
 		} else {
-			assert(ppiv = qpiv , 'Si Es FantasmaDeCol tenía que ser ppiv = qpiv ');
+			static_assert(ppiv = qpiv , "Si Es FantasmaDeCol tenía que ser ppiv = qpiv ");
 			cambio_var_cota_sup_en_columna(ppiv);
 			res = 1;
 		} 
