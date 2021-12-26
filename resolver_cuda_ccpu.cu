@@ -64,7 +64,6 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
 	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
-	simplex.cnt_varfijas = 0;
 	int cnt_RestrInfactibles = 0;
 	int cnt_variablesLiberadas = 0;
 	string mensajeDeError;
