@@ -1178,235 +1178,186 @@ LAS FUNCIONES QUE NECESITA ESTE EJEMPLO DEBEN SER TRAIDAS DEL ORIGINAL E IMPLEME
 */
 void ejemplo(TSimplexGPUs &spx){
 
-  int i, res;
-  TSimplexGPUs spx;
+	int i, res;
+	TSimplexGPUs spx;
  
-  //Creamos un simplex vacío cuya matriz M tendrá:
-  //3 restricciones + la función objetivo
-  //3 variables + los términos independientes
-  //spx := TSimplex.Create_init(4, 4, nil, nil);
-  spx = Create_init(spx,4, 4);
+	//Creamos un simplex vacío cuya matriz M tendrá:
+	//3 restricciones + la función objetivo
+	//3 variables + los términos independientes
+	//spx := TSimplex.Create_init(4, 4, nil, nil);
+	spx = Create_init(spx,4, 4);
 
-  //Cargamos la fila 1, pon_e(k, j, x) hace Mkj:= x  
-  spx.mat[1*(smp.NRestricciones + 1) + 1]=1  
-  spx.mat[1*(smp.NRestricciones + 1) + 2]=3
-  spx.mat[1*(smp.NRestricciones + 1) + 3]=1
-  spx.mat[1*(smp.NRestricciones + 1) +  spx.NVariables]=-10.5
+	//Cargamos la fila 1, pon_e(k, j, x) hace Mkj:= x  
+	spx.mat[1*(smp.NRestricciones + 1) + 1]=1  
+	spx.mat[1*(smp.NRestricciones + 1) + 2]=3
+	spx.mat[1*(smp.NRestricciones + 1) + 3]=1
+	spx.mat[1*(smp.NRestricciones + 1) +  spx.NVariables]=-10.5
 	
 
-  //Cargamos la fila 2 y la declaramos como de igualdad  
-  spx.mat[2*(smp.NRestricciones + 2) + 1]=1  
-  spx.mat[2*(smp.NRestricciones + 2) + 2]=1
-  spx.mat[2*(smp.NRestricciones + 2) + 3]=0
-  spx.mat[2*(smp.NRestricciones + 1) + spx.NVariables]=-5.3
-  spx.FijarRestriccionIgualdad(2);
+	//Cargamos la fila 2 y la declaramos como de igualdad  
+	spx.mat[2*(smp.NRestricciones + 2) + 1]=1  
+	spx.mat[2*(smp.NRestricciones + 2) + 2]=1
+	spx.mat[2*(smp.NRestricciones + 2) + 3]=0
+	spx.mat[2*(smp.NRestricciones + 1) + spx.NVariables]=-5.3
+	spx.FijarRestriccionIgualdad(2);
 
-  //Cargamos la fila 3
-  spx.mat[3*(smp.NRestricciones + 1) + 1]=-1  
-  spx.mat[3*(smp.NRestricciones + 1) + 2]=0
-  spx.mat[3*(smp.NRestricciones + 1) + 3]=1
-  spx.mat[3*(smp.NRestricciones + 1) + spx.NVariables]=2.9
+	//Cargamos la fila 3
+	spx.mat[3*(smp.NRestricciones + 1) + 1]=-1  
+	spx.mat[3*(smp.NRestricciones + 1) + 2]=0
+	spx.mat[3*(smp.NRestricciones + 1) + 3]=1
+	spx.mat[3*(smp.NRestricciones + 1) + spx.NVariables]=2.9
 
-  //Cargamos la fila objetivo z
-  spx.mat[spx.nf*(smp.NRestricciones + 1) + 1]=-1  
-  spx.mat[spx.nf*(smp.NRestricciones + 2) + 2]=-3
-  spx.mat[spx.nf*(smp.NRestricciones + 3) + 3]=-2
+	//Cargamos la fila objetivo z
+	spx.mat[spx.nf*(smp.NRestricciones + 1) + 1]=-1  
+	spx.mat[spx.nf*(smp.NRestricciones + 2) + 2]=-3
+	spx.mat[spx.nf*(smp.NRestricciones + 3) + 3]=-2
 
-  //cota_inf_set(i, x) fija la cota inferior de la variable en la
-  //posición i a x, sota_sup_set hace lo propio con la cota superior
-  //Cotas inferior y superior de x1
-  cota_inf_set(spx, 1, 0);
-  cota_sup_set(spx, 1, 12);
+	//cota_inf_set(i, x) fija la cota inferior de la variable en la
+	//posición i a x, sota_sup_set hace lo propio con la cota superior
+	//Cotas inferior y superior de x1
+	cota_inf_set(spx, 1, 0);
+	cota_sup_set(spx, 1, 12);
 
-  //Cotas inferior y superior de x2
-  cota_inf_set(spx, 2, -6);
-  cota_sup_set(spx, 2, 6);
+	//Cotas inferior y superior de x2
+	cota_inf_set(spx, 2, -6);
+	cota_sup_set(spx, 2, 6);
 
-  //Cotas inferior y superior de x3
-  cota_inf_set(spx, 3, -5);
-  cota_sup_set(spx, 3, 5);
+	//Cotas inferior y superior de x3
+	cota_inf_set(spx, 3, -5);
+	cota_sup_set(spx, 3, 5);
 
-  //Vuelco el simplex al archivo 'ProblemaEjemplo.xlt' para verificar
-  //que el problema armado sea el que quería
-  //MAP COMENTED no needed now spx.DumpSistemaToXLT_('ProblemaEjemplo.xlt', '');
+	//Vuelco el simplex al archivo 'ProblemaEjemplo.xlt' para verificar
+	//que el problema armado sea el que quería
+	//MAP COMENTED no needed now spx.DumpSistemaToXLT_('ProblemaEjemplo.xlt', '');
 
-  //intento resolver
-  res = resolver(spx)
-  if (res == 0) 
-  {
-    //ok, encontró solución
-	printf("%s", 'Solución óptima encontrada:');
-    //spx.fval obtiene el valor de z  
-	//VER FloatToStrF	
-	printf("%s %i\n", 'z=' , FloatToStrF(-spx.fval, ffGeneral, 8, 4)); 
-    for (int i = 1; i<=3; i++) {
-      //spx.xval(i) obtiene el valor de la variable i
-     // Writeln(#9, spx.fGetNombreVar(i), '= ', FloatToStrF(spx.xval(i), ffGeneral, 8, 3));
-	  printf("%s %s %i\n", spx.fGetNombreVar(i),'= ' , FloatToStrF(spx.xval(i), ffGeneral, 8, 3)); //VER
-    }
-    for (int i = 1; i<=3; i++)  {
-      //spx.yval(i) obtiene el valor de la restriccion i
-      //Writeln(#9, spx.fGetNombreRes(i), '= ', FloatToStrF(spx.yval(i), ffGeneral, 8, 3));
-	  printf("%s %s %i\n", spx.fGetNombreRes(i),'= ' , FloatToStrF(spx.yval(i), ffGeneral, 8, 3); //VER
-    }
-	
-	printf("%s", 'Presione <Enter> para continuar');
-   // Readln;//VER
-  }
-  else
-    //Error, lanzamos la excepción
-    //raise Exception.Create('Error resolviendo simplex: ' + spx.mensajeDeError);
-	printf("%s", 'Error resolviendo simplex');
-
-  //Liberamos la memoria usada por el objeto
-  //spx.Free; //VERRR
+	//intento resolver
+	res = resolver(spx)
+	if (res == 0){
+		//ok, encontró solución
+		printf("%s", 'Solución óptima encontrada:');
+		//spx.fval obtiene el valor de z  
+		//VER FloatToStrF	
+		printf("%s %i\n", 'z=' , FloatToStrF(-spx.fval, ffGeneral, 8, 4)); 
+		for (int i = 1; i<=3; i++) {
+			//spx.xval(i) obtiene el valor de la variable i
+			// Writeln(#9, spx.fGetNombreVar(i), '= ', FloatToStrF(spx.xval(i), ffGeneral, 8, 3));
+			printf("%s %s %i\n", spx.fGetNombreVar(i),'= ' , FloatToStrF(spx.xval(i), ffGeneral, 8, 3)); //VER
+		}
+		for (int i = 1; i<=3; i++)  {
+			//spx.yval(i) obtiene el valor de la restriccion i
+			//Writeln(#9, spx.fGetNombreRes(i), '= ', FloatToStrF(spx.yval(i), ffGeneral, 8, 3));
+			printf("%s %s %i\n", spx.fGetNombreRes(i),'= ' , FloatToStrF(spx.yval(i), ffGeneral, 8, 3); //VER
+		}	
+		printf("%s", 'Presione <Enter> para continuar');
+		// Readln;//VER
+   }else{
+		//Error, lanzamos la excepción
+		printf("%s", 'Error resolviendo simplex');
+	}
+	//Liberamos la memoria usada por el objeto
+	//spx.Free; //VERRR
 }
 
 
-
-/******************************/
 int Create_init(TSimplexGPUs &smp, int m, int n) {
+	int cnt_resolver = 0;
+	int cnt_RestriccionesRedundantes = 0;
+	int cnt_VariablesLiberadas = 0;
+
+	/*x_inf := TVectR.Create_Init(n - 1);
+	x_sup := TVectR.Create_Init(n - 1);*/
+	smp.x_inf = Create_Init(n - 1);//??
+	smp.x_sup = Create_Init(n - 1); 
+  
+	smp.flg_x = (int*)malloc((n)*sizeof(int)); 
+	smp.flg_y = (int*)malloc((m)*sizeof(int));
+	smp.top = (int*)malloc((n+1)*sizeof(int)); 
+	smp.left = (int*)malloc((m+1)*sizeof(int));
+	smp.iix = (int*)malloc((n+1)*sizeof(int)); //??
+	smp.iiy = (int*)malloc((m+1)*sizeof(int));//??
 	
-
-  //inherited Create_init(m, n);
-  int cnt_resolver = 0;
-  int cnt_RestriccionesRedundantes = 0;
-  int cnt_VariablesLiberadas = 0;
-  /*{$IFDEF VIOLACIONES_PERMITIDAS}
-  cnt_ViolacionesUsadas := 0;
-  Self.violacionesPermitidas := TListaViolacionesPermitidasSimplex.Create;
-  flg_BorrarListaViolacionesPermitidas := True;
-  {$ENDIF}*/
-
-  /*x_inf := TVectR.Create_Init(n - 1);
-  x_sup := TVectR.Create_Init(n - 1);*/
-  smp.x_inf = Create_Init(n - 1);//??
-  smp.x_sup = Create_Init(n - 1);
-
- 
+	//VER  
+	/*flg_ColumnaEscalada = (int*)malloc((n+1)*sizeof(int)); 
+	DivisorColX = (int*)malloc((n+1)*sizeof(int));
+	flg_FilaEscalada = (int*)malloc((m+1)*sizeof(int)); 
+	DivisorFilY = (int*)malloc((m+1)*sizeof(int));*/
   
-  smp.flg_x = (int*)malloc((n)*sizeof(int)); 
-  smp.flg_y = (int*)malloc((m)*sizeof(int));
-  smp.top = (int*)malloc((n+1)*sizeof(int)); 
-  smp.left = (int*)malloc((m+1)*sizeof(int));
-  smp.iix = (int*)malloc((n+1)*sizeof(int)); //??
-  smp.iiy = (int*)malloc((m+1)*sizeof(int));//??
-	
-  
-  
-//{$IFDEF GATILLOS_CAMBIOVAR}
-  //setlength(gatillos_CambioVar, n);
-  /*gatillos_CambioVar = (int*)malloc((n+1)*sizeof(int));*/
-//{$ENDIF}
-/*{$IFDEF SPXCONLOG}
-  if dbg_on then
-  begin
-    setlength(nombreVars, n);
-    setlength(nombreRest, m);
-  end;
-{$ENDIF}*/
- 
-	
-//VER  
-  /*flg_ColumnaEscalada = (int*)malloc((n+1)*sizeof(int)); 
-  DivisorColX = (int*)malloc((n+1)*sizeof(int));
-  flg_FilaEscalada = (int*)malloc((m+1)*sizeof(int)); 
-  DivisorFilY = (int*)malloc((m+1)*sizeof(int));*/
-  
-  limpiar();
-
+	limpiar();
 }
 
 
-void FijarRestriccionIgualdad(TSimplexGPUs &smp,int kfila, int cnt_igualdades)
-{
-  cnt_igualdades++;
-  smp.flg_y[kfila] = 2;
+void FijarRestriccionIgualdad(TSimplexGPUs &smp,int kfila, int cnt_igualdades){
+	cnt_igualdades++;
+	smp.flg_y[kfila] = 2;
 }
+
 //VER
 void limpiar(){};
 
-void cota_sup_set(TSimplexGPUs &smp,int ivar, double vxsup)
-{
-  int k;
-  double deltaCotaSup;
-  double a;
-
-  vxsup = vxsup - smp.x_inf[ivar];
-  if (smp.flg_x[ivar] == 0) 
-  {
-    smp.flg_x[ivar] = 1;
-    smp.x_sup[ivar] = vxsup;
-  }else{
-   // ya tiene fijada cota sup la cambio
-    deltaCotaSup = vxsup - smp.x_sup[ivar];
-    smp.x_sup[ivar] = vxsup;
-    if (smp.flg_x[ivar] < 0){ //Es la variable complementaria
-      k = smp.iix[ivar];  //VER!
-      if (k > 0){  //Estoy arriba y es la variable complementaria      
-        //for kfila := 1 to nf do
-        for (int kfila= cnt_RestriccionesRedundantes + 1 ;kfila < nf; kfila++ ){
-            //          acum_e( kfila, nc, -e(kfila, k) * deltaCotaSup)
-            //pm[kfila].pv[nc] := pm[kfila].pv[nc] - pm[kfila].pv[k] * deltaCotaSup
-			smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] = smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] - smp.mat[kfila * (smp.NRestricciones + 1) + k] * deltaCotaSup
+void cota_sup_set(TSimplexGPUs &smp,int ivar, double vxsup){
+	int k;
+	double deltaCotaSup, a;
+	vxsup = vxsup - smp.x_inf[ivar];
+	if (smp.flg_x[ivar] == 0){
+		smp.flg_x[ivar] = 1;
+		smp.x_sup[ivar] = vxsup;
+	}else{
+		// ya tiene fijada cota sup la cambio
+		deltaCotaSup = vxsup - smp.x_sup[ivar];
+		smp.x_sup[ivar] = vxsup;
+		if (smp.flg_x[ivar] < 0){ //Es la variable complementaria
+			k = smp.iix[ivar];  //VER!
+			if (k > 0){  //Estoy arriba y es la variable complementaria      
+				for (int kfila= cnt_RestriccionesRedundantes + 1 ;kfila < nf; kfila++ ){
+					smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] = smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] - smp.mat[kfila * (smp.NRestricciones + 1) + k] * deltaCotaSup
+				}
+			}else{//Estoy abajo y es la variable complementaria
+				smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] = smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] + deltaCotaSup
+			}
 		}
-	  }	else{//Estoy abajo y es la variable complementaria
-        //        acum_e( -k, nc, deltaCotaSup);
-        //pm[-k].pv[nc] := pm[-k].pv[nc] + deltaCotaSup;
-		smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] = smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] + deltaCotaSup
-	  }
-	}
-  }
-  
+	}  
 }
 
 
 
 void cota_inf_set(TSimplexGPUs &smp,int ivar, double vxinf){
+	int k;
+	double old_cotainf;
 
-  int k;
-  double old_cotainf;
+	old_cotainf = smp.x_inf[ivar];
+	smp.x_inf[ivar] = vxinf;
 
-  old_cotainf = smp.x_inf[ivar];
-  smp.x_inf[ivar] = vxinf;
-
-  if (old_cotainf != 0){ 
-    vxinf = vxinf - old_cotainf;
-  }else if (vxinf != 0) {
-	cnt_cotas_inf++;
-  }
-  // me fijo si ya fue fijada una cota superior para esta variable
-  // la cambio para reflejar la nueva cota para la nueva variable
-  if (smp.flg_x[ivar] != 0) {
-    smp.x_sup[ivar] := smp.x_sup[ivar] - vxinf;
-  }
-
-  if (smp.flg_x[ivar] >= 0 ){ //Es la variable directa
-
-    k = smp.iix[ivar];//VER!
-    if (k > 0){ //Estoy arriba y es la variable directa
-      // hacemos el cambio de variables
-		for (int kfila = cnt_RestriccionesRedundantes + 1 ;kfila< nf ; kfila++){
-          //        acum_e(kfila, nc, e(kfila, k) * vxinf)
-         // pm[kfila].pv[nc] := pm[kfila].pv[nc] + pm[kfila].pv[k] * vxinf
-		  smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] + smp.mat[kfila * (smp.NRestricciones + 1) + k] * vxinf; 
-		
-		}
-	}else{//Estoy abajo y es la variable directa
-      //      acum_e(-k, nc, -vxinf);
-     // pm[-k].pv[nc] := pm[-k].pv[nc] - vxinf;
-	  smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] - vxinf; 
-	
+	if (old_cotainf != 0){ 
+		vxinf = vxinf - old_cotainf;
+	}else if (vxinf != 0) {
+		cnt_cotas_inf++;
 	}
-  }
+	// me fijo si ya fue fijada una cota superior para esta variable
+	// la cambio para reflejar la nueva cota para la nueva variable
+	if (smp.flg_x[ivar] != 0) {
+		smp.x_sup[ivar] := smp.x_sup[ivar] - vxinf;
+	}
+
+	if (smp.flg_x[ivar] >= 0 ){ //Es la variable directa
+		k = smp.iix[ivar];//VER!
+		if (k > 0){ //Estoy arriba y es la variable directa
+			//hacemos el cambio de variables
+			for (int kfila = cnt_RestriccionesRedundantes + 1 ;kfila< nf ; kfila++){
+				smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] + smp.mat[kfila * (smp.NRestricciones + 1) + k] * vxinf; 
+			}
+		}else{//Estoy abajo y es la variable directa
+			//acum_e(-k, nc, -vxinf);
+			smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] - vxinf; 
+		}
+	}
 }
 
 //VERR
 int resolver(){}
 
 
-/******************************************************************+++**********/
-function TSimplex.resolver: integer;
+/****************************************************************************/
+/*function TSimplex.resolver: integer;
 label
   lbl_inicio, lbl_buscofact;
 var
@@ -1613,3 +1564,4 @@ begin
 {$ENDIF}
   Result := res;
 end;
+*/
