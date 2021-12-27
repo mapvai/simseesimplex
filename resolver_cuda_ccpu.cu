@@ -70,7 +70,6 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
 	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
-	int cnt_varfijas = 0; // Cantidad de variables fijadas
 	int cnt_RestrInfactibles = 0;
 	int cnt_variablesLiberadas = 0;
 	string mensajeDeError;
@@ -100,7 +99,7 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 		return;
 	}
 
-	if (resolverIgualdades(simplex, cnt_columnasFijadas, cnt_varfijas, simplex.cnt_RestriccionesRedundantes, cnt_igualdades) != 1) {
+	if (resolverIgualdades(simplex, cnt_columnasFijadas, simplex.cnt_varfijas, simplex.cnt_RestriccionesRedundantes, cnt_igualdades) != 1) {
 		mensajeDeError = "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.";
 		printf("%s\n", mensajeDeError.c_str());
 		result = -31;
