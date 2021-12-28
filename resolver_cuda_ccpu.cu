@@ -43,12 +43,6 @@ int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt_Restriccio
 bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes);
 int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 
-void ejemplo(TSimplexGPUs &spx);
-void FijarRestriccionIgualdad(TSimplexGPUs &smp,int kfila, int cnt_igualdades);
-int Create_init(TSimplexGPUs &smp, int m, int n);
-void cota_sup_set(int ivar, double vxsup);
-void cota_inf_set(TSimplexGPUs &smp,int ivar, double vxinf);
-
 
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 	//int NEnteras;
@@ -70,6 +64,8 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
 	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
+	// int cnt_varfijas = 0; // Cantidad de variables fijadas, esta variable esta en la estructura Simplex
+	// simplex.cnt_varfijas = 0; // Esto viene al cargarse la estructura
 	int cnt_RestrInfactibles = 0;
 	int cnt_variablesLiberadas = 0;
 	string mensajeDeError;
@@ -81,7 +77,7 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 			cnt_igualdades++;
 		}
 	}
-
+	
 	fijarCajasLaminares(simplex, simplex.cnt_varfijas);
 
 	// Fijamos las variables que se hayan declarado como constantes.
@@ -109,7 +105,7 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	lbl_inicio:
 
 	reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
-
+	
 	res = 1;
 	while (cnt_RestrInfactibles > 0) {
 		res = pasoBuscarFactible(simplex, cnt_RestrInfactibles, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes);
@@ -160,7 +156,8 @@ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 	int res = 0;
 	
-	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1 
+	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1
+		// printf("in fijarCajasLaminares: i, flg_x[i], x_inf[i], x_sup[i] = %d, %d, %g, %g \n", i, smp.flg_x[i], smp.x_inf[i], smp.x_sup[i]);
 		if (abs(smp.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
 			if (abs(smp.x_sup[i] - smp.x_inf[i] ) < CasiCero_CajaLaminar) {
 				if (smp.flg_x[i] < 0) {
@@ -217,6 +214,7 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 					}
 				}
 				if (!buscando) {
+					printf("fijarVariables intercambioColumnas%d, %d\n", kColumnas, kPrimeraLibre);
 					intercambioColumnas(smp, kColumnas, kPrimeraLibre);
 					kPrimeraLibre--;
 					cnt_fijadas++;
@@ -225,12 +223,14 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 				}
 			}
 		}
+		
+		return false;
 
 		// Se inicializa en la fila anterior a la ultima fijada
 		kFilaAFijar = cnt_RestriccionesRedundantes - 1; // MAP: Agreo -1
 		while (cnt_fijadas < cnt_varfijas) {
 		
-			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_fijadas, cnt_columnasFijadas, kPrimeraLibre);;
+			posicionarPrimeraLibre(smp, cnt_varfijas, cnt_fijadas, cnt_columnasFijadas, kPrimeraLibre);
 			if (cnt_fijadas < cnt_varfijas) {
 		 
 				//Busco en filas
@@ -254,6 +254,7 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 				// dv@20191226 Si el término independiente es nulo, la "restricción" es reduntante
 				// entonces la variable ya había quedado fijada
 				if (mejorAkFilai < AsumaCero) {
+					printf("%s: %g, %g\n", "fijarVariables false  mejorAkFilai < AsumaCero: ", mejorAkFilai, AsumaCero);
 					return false;
 				}
 
@@ -275,6 +276,8 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 			}
 		}
 	}
+	
+	printf("FijarVariables estado final: %d, %d, %d, %d \n", cnt_columnasFijadas, cnt_fijadas, kPrimeraLibre, mejorColumnaParaCambiarFila);
 	
 	return true;
 
@@ -466,6 +469,8 @@ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varf
 	string mensajeDeError;
 
 	cnt_acomodadas = cnt_columnasFijadas - cnt_varfijas;
+	
+	return 0;
 
 	// Muevo las igualdades que esten en columnas al lado derecho junto con las FIJADAS
 	iColumna = smp.NVariables - cnt_columnasFijadas - 1; // MAP: Indice modificado, cambio nc por smp.NVariables 
@@ -479,7 +484,7 @@ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varf
 		}
 		iColumna--;
 	}
-
+	
 	// rch@20130307.bugfix - begin ----------------------------
 	// ahora reviso las que ya estén declaradas como redundantes a ver si hay
 	// igualdades e incremento el contador de acomodadas.
@@ -513,19 +518,21 @@ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varf
 		}
 		iFilaAcomodando++;
 	} //Al salir de aca iFilaLibre queda en la primer fila que no es de igualdad
-
+	
 	res = 1;
 
 	nIgualdadesResueltas = 0;
-	nIgualdadesAResolver = iFilaLibre - (cnt_RestriccionesRedundantes + 1);
+	nIgualdadesAResolver = iFilaLibre - cnt_RestriccionesRedundantes; // MAP: Antes iFilaLibre - (cnt_RestriccionesRedundantes + 1),  + 1 debido a que iFilaLibre es uno menos que el original
 	nCerosFilas = (int*)malloc((smp.NRestricciones + 1)*sizeof(int)); // MAP: antes setLength(nCerosFilas, nf);
 	nCerosCols = (int*)malloc((smp.NVariables + 1)*sizeof(int));// MAP: antes setLength(nCerosCols, nc);
 	while (nIgualdadesResueltas < nIgualdadesAResolver) {
 		//    res:= pasoBuscarFactibleIgualdad( cnt_RestriccionesRedundantes + 1 + nIgualdadesResueltas );
 		//    res:= pasoBuscarFactibleIgualdad2( cnt_RestriccionesRedundantes + 1 + nIgualdadesResueltas );
 		//    res:= pasoBuscarFactibleIgualdad3( nIgualdadesAResolver - nIgualdadesResueltas);
-		res = pasoBuscarFactibleIgualdad4(smp, nIgualdadesAResolver - nIgualdadesResueltas, nCerosFilas, nCerosCols, cnt_columnasFijadas, cnt_RestriccionesRedundantes);
 
+		// printf("Launch  pasoBuscarFactibleIgualdad4 with:  %d, %d, %d, %d\n", nCerosFilas[0], nCerosCols[0], cnt_columnasFijadas, cnt_RestriccionesRedundantes);
+		res = pasoBuscarFactibleIgualdad4(smp, nIgualdadesAResolver - nIgualdadesResueltas, nCerosFilas, nCerosCols, cnt_columnasFijadas, cnt_RestriccionesRedundantes);
+		
 		if (res ==1) {
 			nIgualdadesResueltas = nIgualdadesResueltas + 1;
 			cnt_columnasFijadas++;
@@ -590,13 +597,15 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 	int iFila, iColumna, columnasLibres,
 		filaPiv, colPiv;
 	double  maxVal, m;
-
+	
+	printf("Going well 2.3.1.1 \n");
 	// Tengo todas las igualdades en columnas al final y las igualdades en filas al principio
 	columnasLibres = smp.NVariables - cnt_columnasFijadas; // MAP: remuevo -1 ya que smp.NVariables = nc - 1 
 	for (iColumna = 0; iColumna < columnasLibres; iColumna++) { // MAP: Originalmente 1 to columnasLibres
 		nCerosCols[iColumna] = 0;
 	}
-
+	
+	
 	// Busco el máximo valor absoluto y cuento la cantidad de ceros en filas y columnas en la caja desde
 	// cnt_RestriccionesRedundantes + 1 hasta cnt_RestriccionesRedundantes + nIgualdadesNoResueltas
 	// la caja de las igualdades sin resolver
@@ -617,7 +626,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 			}
 		}
 	}
-
+	
 	// Termino de contar la cantidad de ceros en columnas con el resto de las filas
 	for (iFila = cnt_RestriccionesRedundantes + nIgualdadesNoResueltas; iFila < smp.NRestricciones; iFila++) { // MAP: cnt_RestriccionesRedundantes + nIgualdadesNoResueltas + 1 to nf - 1
 		for (iColumna = 0; iColumna < columnasLibres - 1; iColumna++) { // MAP: Originalmente 1 to columnasLibres - 1
@@ -626,7 +635,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 			}
 		}
 	}
-
+	
 	if (maxVal > CasiCero_Simplex) {
 		for (iFila = cnt_RestriccionesRedundantes; iFila < cnt_RestriccionesRedundantes + nIgualdadesNoResueltas; iFila++) { // MAP: Originalmente cnt_RestriccionesRedundantes + 1 to cnt_RestriccionesRedundantes +	nIgualdadesNoResueltas
 			for (iColumna = 0; iColumna < columnasLibres; iColumna++) { // MAP: Originalmente 1 to columnasLibres
@@ -639,12 +648,15 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 				}
 			}
 		}
-
+		
+		// printf("In pasoBuscarFactibleIgualdad4 %d, %d, %d \n", filaPiv, cnt_RestriccionesRedundantes, nIgualdadesNoResueltas);
 		// Muevo la fila a intercambiar al final asi me siguen quedando las que voy a acomodar en bloque desde cnt_RestriccionesRedundantes
 		if (filaPiv != cnt_RestriccionesRedundantes + nIgualdadesNoResueltas - 1) { // MAP: Agrego -1 para correr el indice, filaPiv ya esta en el indice correcto
 			intercambioFilas(smp, filaPiv, cnt_RestriccionesRedundantes + nIgualdadesNoResueltas - 1); // MAP: Agrego -1 para correr el indice, filaPiv ya esta en el indice correcto
 		}
+
 		intercambiar(smp, cnt_RestriccionesRedundantes + nIgualdadesNoResueltas - 1, colPiv); // MAP: Agrego -1 para correr el indice, colPiv ya esta en el indice correcto
+
 		if (colPiv != columnasLibres) {
 			intercambioColumnas(smp, colPiv, columnasLibres - 1); // MAP: Agrego -1 para correr el indice, colPiv ya esta en el indice correcto
 		}
@@ -1172,396 +1184,3 @@ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRed
 	return res;
 }
 
-
-/* MAP: AHORA DEBEMOS IMPLEMENTAR EL EJEMPLO EN C++ PARA ARRANCAR LAS PRUEBAS CON DATOS FACILES DE CHEQUEAR, 
-LAS FUNCIONES QUE NECESITA ESTE EJEMPLO DEBEN SER TRAIDAS DEL ORIGINAL E IMPLEMENTADAS TAMBIEN
-*/
-void ejemplo(TSimplexGPUs &spx){
-
-	int i, res;
-	TSimplexGPUs spx;
- 
-	//Creamos un simplex vacío cuya matriz M tendrá:
-	//3 restricciones + la función objetivo
-	//3 variables + los términos independientes
-	//spx := TSimplex.Create_init(4, 4, nil, nil);
-	spx = Create_init(spx,4, 4);
-
-	//Cargamos la fila 1, pon_e(k, j, x) hace Mkj:= x  
-	spx.mat[1*(smp.NRestricciones + 1) + 1]=1  
-	spx.mat[1*(smp.NRestricciones + 1) + 2]=3
-	spx.mat[1*(smp.NRestricciones + 1) + 3]=1
-	spx.mat[1*(smp.NRestricciones + 1) +  spx.NVariables]=-10.5
-	
-
-	//Cargamos la fila 2 y la declaramos como de igualdad  
-	spx.mat[2*(smp.NRestricciones + 2) + 1]=1  
-	spx.mat[2*(smp.NRestricciones + 2) + 2]=1
-	spx.mat[2*(smp.NRestricciones + 2) + 3]=0
-	spx.mat[2*(smp.NRestricciones + 1) + spx.NVariables]=-5.3
-	spx.FijarRestriccionIgualdad(2);
-
-	//Cargamos la fila 3
-	spx.mat[3*(smp.NRestricciones + 1) + 1]=-1  
-	spx.mat[3*(smp.NRestricciones + 1) + 2]=0
-	spx.mat[3*(smp.NRestricciones + 1) + 3]=1
-	spx.mat[3*(smp.NRestricciones + 1) + spx.NVariables]=2.9
-
-	//Cargamos la fila objetivo z
-	spx.mat[spx.nf*(smp.NRestricciones + 1) + 1]=-1  
-	spx.mat[spx.nf*(smp.NRestricciones + 2) + 2]=-3
-	spx.mat[spx.nf*(smp.NRestricciones + 3) + 3]=-2
-
-	//cota_inf_set(i, x) fija la cota inferior de la variable en la
-	//posición i a x, sota_sup_set hace lo propio con la cota superior
-	//Cotas inferior y superior de x1
-	cota_inf_set(spx, 1, 0);
-	cota_sup_set(spx, 1, 12);
-
-	//Cotas inferior y superior de x2
-	cota_inf_set(spx, 2, -6);
-	cota_sup_set(spx, 2, 6);
-
-	//Cotas inferior y superior de x3
-	cota_inf_set(spx, 3, -5);
-	cota_sup_set(spx, 3, 5);
-
-	//Vuelco el simplex al archivo 'ProblemaEjemplo.xlt' para verificar
-	//que el problema armado sea el que quería
-	//MAP COMENTED no needed now spx.DumpSistemaToXLT_('ProblemaEjemplo.xlt', '');
-
-	//intento resolver
-	res = resolver(spx)
-	if (res == 0){
-		//ok, encontró solución
-		printf("%s", 'Solución óptima encontrada:');
-		//spx.fval obtiene el valor de z  
-		//VER FloatToStrF	
-		printf("%s %i\n", 'z=' , FloatToStrF(-spx.fval, ffGeneral, 8, 4)); 
-		for (int i = 1; i<=3; i++) {
-			//spx.xval(i) obtiene el valor de la variable i
-			// Writeln(#9, spx.fGetNombreVar(i), '= ', FloatToStrF(spx.xval(i), ffGeneral, 8, 3));
-			printf("%s %s %i\n", spx.fGetNombreVar(i),'= ' , FloatToStrF(spx.xval(i), ffGeneral, 8, 3)); //VER
-		}
-		for (int i = 1; i<=3; i++)  {
-			//spx.yval(i) obtiene el valor de la restriccion i
-			//Writeln(#9, spx.fGetNombreRes(i), '= ', FloatToStrF(spx.yval(i), ffGeneral, 8, 3));
-			printf("%s %s %i\n", spx.fGetNombreRes(i),'= ' , FloatToStrF(spx.yval(i), ffGeneral, 8, 3); //VER
-		}	
-		printf("%s", 'Presione <Enter> para continuar');
-		// Readln;//VER
-   }else{
-		//Error, lanzamos la excepción
-		printf("%s", 'Error resolviendo simplex');
-	}
-	//Liberamos la memoria usada por el objeto
-	//spx.Free; //VERRR
-}
-
-
-int Create_init(TSimplexGPUs &smp, int m, int n) {
-	int cnt_resolver = 0;
-	int cnt_RestriccionesRedundantes = 0;
-	int cnt_VariablesLiberadas = 0;
-
-	/*x_inf := TVectR.Create_Init(n - 1);
-	x_sup := TVectR.Create_Init(n - 1);*/
-	smp.x_inf = Create_Init(n - 1);//??
-	smp.x_sup = Create_Init(n - 1); 
-  
-	smp.flg_x = (int*)malloc((n)*sizeof(int)); 
-	smp.flg_y = (int*)malloc((m)*sizeof(int));
-	smp.top = (int*)malloc((n+1)*sizeof(int)); 
-	smp.left = (int*)malloc((m+1)*sizeof(int));
-	smp.iix = (int*)malloc((n+1)*sizeof(int)); //??
-	smp.iiy = (int*)malloc((m+1)*sizeof(int));//??
-	
-	//VER  
-	/*flg_ColumnaEscalada = (int*)malloc((n+1)*sizeof(int)); 
-	DivisorColX = (int*)malloc((n+1)*sizeof(int));
-	flg_FilaEscalada = (int*)malloc((m+1)*sizeof(int)); 
-	DivisorFilY = (int*)malloc((m+1)*sizeof(int));*/
-  
-	limpiar();
-}
-
-
-void FijarRestriccionIgualdad(TSimplexGPUs &smp,int kfila, int cnt_igualdades){
-	cnt_igualdades++;
-	smp.flg_y[kfila] = 2;
-}
-
-//VER
-void limpiar(){};
-
-void cota_sup_set(TSimplexGPUs &smp,int ivar, double vxsup){
-	int k;
-	double deltaCotaSup, a;
-	vxsup = vxsup - smp.x_inf[ivar];
-	if (smp.flg_x[ivar] == 0){
-		smp.flg_x[ivar] = 1;
-		smp.x_sup[ivar] = vxsup;
-	}else{
-		// ya tiene fijada cota sup la cambio
-		deltaCotaSup = vxsup - smp.x_sup[ivar];
-		smp.x_sup[ivar] = vxsup;
-		if (smp.flg_x[ivar] < 0){ //Es la variable complementaria
-			k = smp.iix[ivar];  //VER!
-			if (k > 0){  //Estoy arriba y es la variable complementaria      
-				for (int kfila= cnt_RestriccionesRedundantes + 1 ;kfila < nf; kfila++ ){
-					smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] = smp.mat[kfila * (smp.NRestricciones + 1) +  smp.NVariables] - smp.mat[kfila * (smp.NRestricciones + 1) + k] * deltaCotaSup
-				}
-			}else{//Estoy abajo y es la variable complementaria
-				smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] = smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] + deltaCotaSup
-			}
-		}
-	}  
-}
-
-
-
-void cota_inf_set(TSimplexGPUs &smp,int ivar, double vxinf){
-	int k;
-	double old_cotainf;
-
-	old_cotainf = smp.x_inf[ivar];
-	smp.x_inf[ivar] = vxinf;
-
-	if (old_cotainf != 0){ 
-		vxinf = vxinf - old_cotainf;
-	}else if (vxinf != 0) {
-		cnt_cotas_inf++;
-	}
-	// me fijo si ya fue fijada una cota superior para esta variable
-	// la cambio para reflejar la nueva cota para la nueva variable
-	if (smp.flg_x[ivar] != 0) {
-		smp.x_sup[ivar] := smp.x_sup[ivar] - vxinf;
-	}
-
-	if (smp.flg_x[ivar] >= 0 ){ //Es la variable directa
-		k = smp.iix[ivar];//VER!
-		if (k > 0){ //Estoy arriba y es la variable directa
-			//hacemos el cambio de variables
-			for (int kfila = cnt_RestriccionesRedundantes + 1 ;kfila< nf ; kfila++){
-				smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] + smp.mat[kfila * (smp.NRestricciones + 1) + k] * vxinf; 
-			}
-		}else{//Estoy abajo y es la variable directa
-			//acum_e(-k, nc, -vxinf);
-			smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] =  smp.mat[-k * (smp.NRestricciones + 1) + smp.NVariables] - vxinf; 
-		}
-	}
-}
-
-//VERR
-int resolver(){}
-
-
-/****************************************************************************/
-/*function TSimplex.resolver: integer;
-label
-  lbl_inicio, lbl_buscofact;
-var
-  res: integer;
-{$IFDEF DBG}
-  aux_dbg: integer;
-{$ENDIF}
-begin
-  Inc(cnt_resolver);
-  cnt_columnasFijadas := 0;
-
-{$IFDEF DBG_CONTAR_CNT_SIMPLEX}
-  Inc(cnt_debug);
-  if (cnt_debug mod 10000) = 0 then
-    writeln('cnt_debug= ', cnt_debug);
-{$ENDIF}
-
-{$IFDEF SPXCONLOG}
-  appendWriteXLT('INICIO CntResolver: ' + IntToStr(cnt_resolver), cnt_paso, False);
-{$ENDIF}
-
-{$IFDEF GATILLOS_CAMBIOVAR}
-  if (cnt_Gatillos > 0) and (gatillos_no_procesados) then
-  begin
-    for k := 1 to cnt_Gatillos do
-      cambio_var_cota_sup_en_columna(gatillos_CambioVar[k]);
-    gatillos_no_procesados := True;
-  {$IFDEF SPXCONLOG}
-    appendWriteXLT('GATILLOS_CAMBIOVAR Cnt_Gatillos: ' + IntToStr(cnt_Gatillos),
-      cnt_paso, False);
-  {$ENDIF}
-  end;
-{$ENDIF}
-
-
-{$IFDEF FijarCajasLaminares}
-{$IFDEF SPXCONLOG}
-  writelog('Detección de cajas laminares++++++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
-  FijarCajasLaminares;
-{$ENDIF}
-
-
-{$IFDEF SPXCONLOG}
-  writelog('Fijando Variables++++++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  // Fijamos las variables que se hayan declarado como constantes.
-
-
-  if not FijarVariables_ then
-  begin
-    mensajeDeError :=
-      'PROBLEMA INFACTIBLE - No fijar las variable Fijas.';
-    Result := -32;
-    exit;
-  end;
-
-
-
-{$IFDEF SPXCONLOG}
-  writelog('Enfilando Variables libres ++++++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  if not EnfilarVariablesLibres then
-  begin
-    mensajeDeError := 'No fue posible conmutar a filas todas las variables libres';
-    Result := -33;
-    exit;
-  end;
-
-
-
-{$IFDEF SPXCONLOG}
-  writelog('Ordenando Igualdades+++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  //system.writeln( cnt_resolver );
-  if ResolverIgualdades <> 1 then
-  begin
-    mensajeDeError :=
-      'PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.';
-    Result := -31;
-    exit;
-  end;
-
-{$IFDEF SPXCONLOG}
-  appendWriteXLT('INICIO CntResolver: ' + IntToStr(cnt_resolver), cnt_paso, False);
-{$ENDIF}
-
-  lbl_inicio:
-
-{$IFDEF SPXCONLOG}
-    writelog('Reordenando por factibilidad+++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  reordenarPorFactibilidad;
-
-  lbl_buscofact:
-{$IFDEF SPXCONLOG}
-    writelog('Buscar Factible++++++++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  res := 1;
-  while cnt_RestrInfactibles > 0 do
-  begin
-{$IFDEF SPXCONLOG}
-    writelog('BuscandoFactible: cnt_infactibles: ' + IntToStr(cnt_RestrInfactibles) +
-      '; Fila Infactible: ' + getNombreFila(nf - cnt_RestrInfactibles));
-{$ENDIF}
-    res := pasoBuscarFactible;
-
-(*
-{$IFDEF SPXCONLOG}
-    writelog('BuscandoFactible: res: '+IntToStr( res ) );
-    appendWriteXLT( 'A', cnt_paso, false );
-{$ENDIF}
-*)
-    case res of
-      0: if cnt_RestrInfactibles > 0 then
-        begin
-          {$IFDEF VIOLACIONES_PERMITIDAS}
-          if intentarModificarCotaSupParaResolverRes then
-            goto lbl_inicio;
-          {$ENDIF}
-          mensajeDeError := 'PROBLEMA INFACTIBLE - Buscando factibilidad';
-          Result := -10;
-{$IFDEF SPXCONLOG}
-          writelog(mensajeDeError);
-          //          self.DumpSistemaToOctaveFile( 'spx_infactible_'+ INtToStr( cnt_resolver )+'.m', '' );
-          // self.DumpSistemaToXLT_('tito.xlt', 'lucrecia' );
-
-{$ENDIF}
-          exit;
-        end;
-      -1:
-      begin
-        {$IFDEF VIOLACIONES_PERMITIDAS}
-        if intentarModificarCotaSupParaResolverRes then
-          goto lbl_inicio;
-        {$ENDIF}
-        mensajeDeError := 'NO encontramos pivote bueno - Buscando Factibilidad';
-        Result := -11;
-{$IFDEF SPXCONLOG}
-        writelog(mensajeDeError);
-{$ENDIF}
-        exit;
-      end;
-      -2:
-      begin
-        mensajeDeError := '???cnt_infactibles= 0 - Buscando Factibilidad';
-        Result := -12;
-{$IFDEF SPXCONLOG}
-        writelog(mensajeDeError);
-{$ENDIF}
-        exit;
-      end;
-    end;
-  end;
-
-{$IFDEF SPXCONLOG}
-  writelog('Maximizando por pasos++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-
-{$IFDEF DBG}
-  aux_dbg := primerainfactible;
-  if aux_dbg <> nf + 1 then
-    raise Exception.Create(
-      'TSimplex.Resolver: Hay una Fila Infactible al Momento de Maximizar Por Pasos. Kfila ='
-      + IntToStr(aux_dbg) + '; cnt_debug= ' + IntToStr(cnt_debug));
-{$ENDIF}
-
-  while res = 1 do
-  begin
-(*
-{$IFDEF SPXCONLOG}
-    writelog('DarPaso: cnt_infactibles: '+IntToStr( cnt_infactibles ) );
-{$ENDIF}
-*)
-    res := darpaso;
-(*
-{$IFDEF SPXCONLOG}
-    writelog('DarPaso: res: '+IntToStr( res ) );
-    appendWriteXLT( 'B', cnt_paso, false );
-{$ENDIF}
-*)
-    case res of
-      //    0: showmessage('FIN');
-      -1:
-      begin
-        mensajeDeError := 'Error -- NO encontramos pivote bueno dando paso';
-        Result := -21;
-{$IFDEF SPXCONLOG}
-{$IFDEF DBG_CONTAR_CNT_SIMPLEX}
-        writelog('Error -- NO encontramos pivote bueno dando paso: cnt_dbug:' +
-          IntToStr(cnt_debug));
-{$ENDIF}
-        appendWriteXLT('ERROR!, cnt_paso', cnt_paso, False);
-{$ENDIF}
-        exit;
-      end;
-    end;
-  end;
-  if res = 2 then
-    goto lbl_inicio;
-{$IFDEF SPXCONLOG}
-  writelog('Finalizado+++++++++++++++++++++++++++++++++++++++++++++++++++++++');
-{$ENDIF}
-  Result := res;
-end;
-*/
