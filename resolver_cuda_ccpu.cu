@@ -242,11 +242,11 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 				}
 
 				mejorColumnaParaCambiarFila = 0; // MAP: antes 1
-				mejorAkFilai = abs(smp.mat[kFilaAFijar*(smp.NRestricciones + 1)]); // MAP: before [1], primera columna ahora es 0, [kFilaAFijar][0]
+				mejorAkFilai = abs(smp.mat[kFilaAFijar*(smp.NVariables + 1)]); // MAP: before [1], primera columna ahora es 0, [kFilaAFijar][0]
 				for (kColumnas = 1; kColumnas < kPrimeraLibre; kColumnas++) { // MAP: Antes 2 to kPrimeraLibre
-					if (abs(smp.mat[kFilaAFijar * (smp.NRestricciones + 1) + kColumnas]) > mejorAkFilai) {
+					if (abs(smp.mat[kFilaAFijar * (smp.NVariables + 1) + kColumnas]) > mejorAkFilai) {
 						mejorColumnaParaCambiarFila = kColumnas;
-						mejorAkFilai = abs(smp.mat[kFilaAFijar * (smp.NRestricciones + 1) + kColumnas]);
+						mejorAkFilai = abs(smp.mat[kFilaAFijar * (smp.NVariables + 1) + kColumnas]);
 					}
 				}
 
@@ -289,58 +289,58 @@ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	double m, piv, invPiv;
 	int k, j;
 
-	piv = smp.mat[kfil * (smp.NRestricciones + 1) + jcol];
+	piv = smp.mat[kfil * (smp.NVariables + 1) + jcol];
 	invPiv = 1 / piv;
 
 	// MAP: POSIBLE MEJORA, en GPU se encargaran hilos diferentes, recorrida por filas
 	// MAP: En el codigo original se separa en 4 casos el mismo codigo, se recorre desde 1 to cnt_RestriccionesRedundantes to kfil - 1  <skipping kfil (fila pivot)> to nf - 1 to nf
 	// MAP: Se concatenan estos casos en un mismo for
 	for (k = 0; k < kfil; k++) {
-		m = -smp.mat[k * (smp.NRestricciones + 1) + jcol] * invPiv;
+		m = -smp.mat[k * (smp.NVariables + 1) + jcol] * invPiv;
 		if (abs(m) > 0) {
 			for (j = 0; j < jcol; j++) {
-				smp.mat[k * (smp.NRestricciones + 1) + j] = smp.mat[k * (smp.NRestricciones + 1) + j] + m * smp.mat[kfil * (smp.NRestricciones + 1) + j]; 
+				smp.mat[k * (smp.NVariables + 1) + j] = smp.mat[k * (smp.NVariables + 1) + j] + m * smp.mat[kfil * (smp.NVariables + 1) + j]; 
 			}
 			
-			smp.mat[k * (smp.NRestricciones + 1) + jcol] = -m;
+			smp.mat[k * (smp.NVariables + 1) + jcol] = -m;
 			
 			for (j = jcol + 1; j <= smp.NVariables; j++) { // MAP: Antes "to nc"
-				smp.mat[k * (smp.NRestricciones + 1) + j] = smp.mat[k * (smp.NRestricciones + 1) + j] + m * smp.mat[kfil * (smp.NRestricciones + 1) + j];
+				smp.mat[k * (smp.NVariables + 1) + j] = smp.mat[k * (smp.NVariables + 1) + j] + m * smp.mat[kfil * (smp.NVariables + 1) + j];
 			}
 		} else {
-			smp.mat[k * (smp.NRestricciones + 1) + jcol] = 0; // IMPONGO_CEROS
+			smp.mat[k * (smp.NVariables + 1) + jcol] = 0; // IMPONGO_CEROS
 		}
 	}
 	
 	// Salteo la fila kfil
 	
 	for (k = kfil + 1; k <= smp.NRestricciones; k++) { // MAP: <= pq considera la fila de la funcion z
-		m = -smp.mat[k * (smp.NRestricciones + 1) + jcol] * invPiv;
+		m = -smp.mat[k * (smp.NVariables + 1) + jcol] * invPiv;
 		if (abs(m) > 0) {
 			for (j = 0; j < jcol; j++) {
-				smp.mat[k * (smp.NRestricciones + 1) + j] = smp.mat[k * (smp.NRestricciones + 1) + j] + m * smp.mat[kfil * (smp.NRestricciones + 1) + j]; 
+				smp.mat[k * (smp.NVariables + 1) + j] = smp.mat[k * (smp.NVariables + 1) + j] + m * smp.mat[kfil * (smp.NVariables + 1) + j]; 
 			}
 			
-			smp.mat[k * (smp.NRestricciones + 1) + jcol] = -m;
+			smp.mat[k * (smp.NVariables + 1) + jcol] = -m;
 			
 			for (j = jcol + 1; j <= smp.NVariables; j++) { // MAP: Antes "to nc"
-				smp.mat[k * (smp.NRestricciones + 1) + j] = smp.mat[k * (smp.NRestricciones + 1) + j] + m * smp.mat[kfil * (smp.NRestricciones + 1) + j];
+				smp.mat[k * (smp.NVariables + 1) + j] = smp.mat[k * (smp.NVariables + 1) + j] + m * smp.mat[kfil * (smp.NVariables + 1) + j];
 			}
 		} else {
-			smp.mat[k * (smp.NRestricciones + 1) + jcol] = 0; // IMPONGO_CEROS
+			smp.mat[k * (smp.NVariables + 1) + jcol] = 0; // IMPONGO_CEROS
 		}
 	}
 
 	// Completo la fila kfil
 	m = -invPiv;
 	for (j = 0; j < jcol; j++) {
-		smp.mat[kfil * (smp.NRestricciones + 1) + j] = smp.mat[kfil * (smp.NRestricciones + 1) + j] * m;
+		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
 	}
 
-	smp.mat[kfil * (smp.NRestricciones + 1) + jcol] = -m;
+	smp.mat[kfil * (smp.NVariables + 1) + jcol] = -m;
 	
 	for (j = jcol + 1; j <= smp.NVariables; j++) { // MAP: Antes jcol + 1 to nc
-		smp.mat[kfil * (smp.NRestricciones + 1) + j] = smp.mat[kfil * (smp.NRestricciones + 1) + j] * m;
+		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
 	}
 
 	k = smp.top[jcol];
@@ -381,9 +381,9 @@ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 	double m;
 
 	for (k = 0; k <= smp.NRestricciones; k++) { // MAP: Intercambia toda la columna por lo tanto va hasta smp.NRestricciones inclusive
-		m = smp.mat[k * (smp.NRestricciones + 1) + j1];
-		smp.mat[k * (smp.NRestricciones + 1) + j1]  = smp.mat[k * (smp.NRestricciones + 1) + j2];
-		smp.mat[k * (smp.NRestricciones + 1) + j2]  = m;
+		m = smp.mat[k * (smp.NVariables + 1) + j1];
+		smp.mat[k * (smp.NVariables + 1) + j1]  = smp.mat[k * (smp.NVariables + 1) + j2];
+		smp.mat[k * (smp.NVariables + 1) + j2]  = m;
 	}
 
 	k = smp.top[j1];
@@ -400,9 +400,9 @@ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
 	double m;
 
 	for (j = 0; j <= smp.NVariables; j++) { // MAP: Intercambia toda la fila por lo tanto va hasta smp.NVariables inclusive
-		m = smp.mat[k1 * (smp.NRestricciones + 1) + j];
-		smp.mat[k1 * (smp.NRestricciones + 1) + j] = smp.mat[k2 * (smp.NRestricciones + 1) + j];
-		smp.mat[k2 * (smp.NRestricciones + 1) + j] = m;
+		m = smp.mat[k1 * (smp.NVariables + 1) + j];
+		smp.mat[k1 * (smp.NVariables + 1) + j] = smp.mat[k2 * (smp.NVariables + 1) + j];
+		smp.mat[k2 * (smp.NVariables + 1) + j] = m;
 	}
 
 	j = smp.left[k1];
@@ -425,8 +425,8 @@ int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFila
     res = -1;
     a = 0.0;
 	for (iFil = iFilaFrom; iFil <= iFilaHasta; iFil++) { // MAP: Originalmente iFilaFrom to iFilaHasta, eso no cambia ya que se le pasan los indices ya adaptados a la indexacion desde 0
-		if (abs(smp.mat[iFil * (smp.NRestricciones + 1) + jCol]) > a) {
-			a = abs(smp.mat[iFil * (smp.NRestricciones + 1) + jCol]);
+		if (abs(smp.mat[iFil * (smp.NVariables + 1) + jCol]) > a) {
+			a = abs(smp.mat[iFil * (smp.NVariables + 1) + jCol]);
 			res = iFil;
 		}
 	}
@@ -568,7 +568,7 @@ bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
 	
 	int ix;
 	// if e(kfila, nc) < -CasiCero_Simplex then
-	if (smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables] < -CasiCero_Simplex) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+	if (smp.mat[kfila * (smp.NVariables + 1) + smp.NVariables] < -CasiCero_Simplex) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 		// Si la fila es < 0
 		fantasma = false;
 		return false;
@@ -576,7 +576,7 @@ bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
 		// Si rval es >= 0 reviso si es una variable con cota superior
 		ix = -smp.left[kfila];
 		// if (flg_x[ix] <> 0) and (e(kfila, nc) > (x_sup.pv[ix] + CasiCero_Simplex_CotaSup)) then
-		if ((smp.flg_x[ix - 1] != 0) && ((smp.mat[kfila * (smp.NRestricciones + 1) + smp.NVariables]) > (smp.x_sup[ix - 1] + CasiCero_Simplex_CotaSup))) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice y agrego -1 para correr el indice
+		if ((smp.flg_x[ix - 1] != 0) && ((smp.mat[kfila * (smp.NVariables + 1) + smp.NVariables]) > (smp.x_sup[ix - 1] + CasiCero_Simplex_CotaSup))) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice y agrego -1 para correr el indice
 			//Si violo la cota superior
 			fantasma = true;
 			return false;
@@ -615,7 +615,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 	// MAP: remuevo el +1 debido a la nueva indexacion desde 0, originalmente cnt_RestriccionesRedundantes + 1 to cnt_RestriccionesRedundantes + nIgualdadesNoResueltas
 	for (iFila = cnt_RestriccionesRedundantes; iFila < cnt_RestriccionesRedundantes + nIgualdadesNoResueltas; iFila++) { 
 		for (iColumna = 0; iColumna <columnasLibres; iColumna++) { // MAP: muevo el indice una lugar hacia atras para considerar el cambio de indexacion desde 0
-			m = abs(smp.mat[iFila * (smp.NRestricciones + 1) + iColumna]);
+			m = abs(smp.mat[iFila * (smp.NVariables + 1) + iColumna]);
 			if (m < AsumaCero) {
 				nCerosFilas[iFila]++;
 				nCerosCols[iColumna]++;
@@ -630,7 +630,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 	// Termino de contar la cantidad de ceros en columnas con el resto de las filas
 	for (iFila = cnt_RestriccionesRedundantes + nIgualdadesNoResueltas; iFila < smp.NRestricciones; iFila++) { // MAP: cnt_RestriccionesRedundantes + nIgualdadesNoResueltas + 1 to nf - 1
 		for (iColumna = 0; iColumna < columnasLibres - 1; iColumna++) { // MAP: Originalmente 1 to columnasLibres - 1
-			if (abs(smp.mat[iFila * (smp.NRestricciones + 1) + iColumna]) < AsumaCero) {
+			if (abs(smp.mat[iFila * (smp.NVariables + 1) + iColumna]) < AsumaCero) {
 				nCerosCols[iColumna]++;
 			}
 		}
@@ -639,7 +639,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 	if (maxVal > CasiCero_Simplex) {
 		for (iFila = cnt_RestriccionesRedundantes; iFila < cnt_RestriccionesRedundantes + nIgualdadesNoResueltas; iFila++) { // MAP: Originalmente cnt_RestriccionesRedundantes + 1 to cnt_RestriccionesRedundantes +	nIgualdadesNoResueltas
 			for (iColumna = 0; iColumna < columnasLibres; iColumna++) { // MAP: Originalmente 1 to columnasLibres
-				if (abs(smp.mat[iFila * (smp.NRestricciones + 1) + iColumna]) * 10 >= maxVal) {
+				if (abs(smp.mat[iFila * (smp.NVariables + 1) + iColumna]) * 10 >= maxVal) {
 					// Lo considero como posible pivote
 					if ((nCerosFilas[filaPiv] + nCerosCols[colPiv]) < (nCerosFilas[iFila] + nCerosCols[iColumna])) {
 						filaPiv = iFila;
@@ -680,7 +680,7 @@ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes
 	*/
 	for (kfil = cnt_RestriccionesRedundantes; kfil < smp.NRestricciones; kfil++) { // MAP: originalmente cnt_RestriccionesRedundantes + 1 to nf - 1
 		// rval := e(kfil, nc);
-		rval = smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+		rval = smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 		if (rval > 0) {
 		  // Si es = 0 no chequeo pues la fantasma no puede estar violada
 			if (smp.left[kfil] < 0) {
@@ -693,14 +693,14 @@ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes
 					} else {
 						// La viola por errores númericos
 						// pon_e(kfil, nc, x_sup.pv[ix])
-						smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables] = smp.x_sup[ix]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+						smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables] = smp.x_sup[ix]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 					}
 				}
 			}
 		} else {
 			if (rval > -CasiCero_Simplex_CotaSup) {
 			  // pon_e(kfil, nc, 0);
-			  smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables] = 0; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+			  smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables] = 0; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 			}
 		}
 	}
@@ -711,12 +711,12 @@ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes
 	cnt_RestrInfactibles = 0;
 	while (kfil < (smp.NRestricciones - cnt_RestrInfactibles)) { // MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice
 		// rval:= e(kfil, nc);
-		rval = smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+		rval = smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 		if (rval < 0) {
 			cnt_RestrInfactibles++;
 			// while (e(nf-cnt_RestrInfactibles, nc ) < 0)
 			// MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice, idem para nc	
-			while ((smp.mat[smp.NRestricciones - cnt_RestrInfactibles * (smp.NRestricciones + 1) + smp.NVariables] < 0) && (kfil < (smp.NRestricciones - cnt_RestrInfactibles))) {
+			while ((smp.mat[smp.NRestricciones - cnt_RestrInfactibles * (smp.NVariables + 1) + smp.NVariables] < 0) && (kfil < (smp.NRestricciones - cnt_RestrInfactibles))) {
 				cnt_RestrInfactibles++;
 			}
 			if (kfil < (smp.NRestricciones - cnt_RestrInfactibles)) { // MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice
@@ -740,10 +740,10 @@ void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila) {
 	// MAP: Confio en el comentario debajo que eso da positivo por lo que resto 1 para ajustar el indice a la indexacion desde 0, de hecho si diera negativo como se trata de un indice fallaria
 	ix = -smp.left[k_fila] - 1; // Se supone que esto da positivo, sino no es una x
 	for (k = 0; k < smp.NVariables; k++) { // MAP: Muevo los indices 1 to nc-1 un lado a la izquierda para para ajustar el indice a la indexacion desde 0
-		smp.mat[k_fila * (smp.NRestricciones + 1) + k] = -smp.mat[k_fila * (smp.NRestricciones + 1) + k];
+		smp.mat[k_fila * (smp.NVariables + 1) + k] = -smp.mat[k_fila * (smp.NVariables + 1) + k];
 	}
 	
-	smp.mat[k_fila * (smp.NRestricciones + 1) + smp.NVariables] = smp.x_sup[ix] - smp.mat[k_fila * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+	smp.mat[k_fila * (smp.NVariables + 1) + smp.NVariables] = smp.x_sup[ix] - smp.mat[k_fila * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 
 	if (abs(smp.flg_x[ix]) != 1) {
 		printf("%s\n", "mmmm ... porqué?");
@@ -761,7 +761,7 @@ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_col
 
 	pFilaOpt = smp.NRestricciones - cnt_RestrInfactibles; // MAP: Antes nf - cnt_RestrInfactibles, indice ajustado
 	// rval:= e(pFilaOpt, nc);
-	rval = smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+	rval = smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 
 	/* OJO LE AGREGO ESTE CHEQUEO PARA PROBAR */
 	// Si parece satisfecha verifico que no se esté violándo la  fantasma
@@ -772,17 +772,17 @@ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_col
 				if (rval > smp.x_sup[ix] + CasiCero_Simplex) {
 					cambiar_borde_de_caja(smp, pFilaOpt);
 					// rval:= e(pFilaOpt, nc );
-					rval = smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+					rval = smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				} else {
 					// pon_e(pFilaOpt, nc, x_sup.pv[ix]);
-					smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables] = smp.x_sup[ix]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+					smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables] = smp.x_sup[ix]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 					rval = smp.x_sup[ix];
 				}
 			}
 		}
 	} else if (rval > -CasiCero_Simplex) {
 		// pon_e(pFilaOpt, nc, 0);
-		smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables] = 0; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+		smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables] = 0; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 		rval = 0;
 	}
 
@@ -805,14 +805,14 @@ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_col
 							cambio_var_cota_sup_en_columna(smp, qpiv);
 						}
 						// if ( e( pFilaOpt, nc) >= 0 ) then
-						if (smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables] >= 0) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+						if (smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables] >= 0) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 							cnt_RestrInfactibles--;
 						}
 						res = 1;
 					} else {
 						cambio_var_cota_sup_en_columna(smp, ppiv);
 						// if ( e( pFilaOpt, nc) >= 0 ) then
-						if (smp.mat[pFilaOpt * (smp.NRestricciones + 1) + smp.NVariables] >= 0) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+						if (smp.mat[pFilaOpt * (smp.NVariables + 1) + smp.NVariables] >= 0) { // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 							cnt_RestrInfactibles--;
 						}
 						res = 1;
@@ -848,8 +848,8 @@ int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas) {
 	ires = -1;
 	maxval = CasiCero_Simplex;
 	for (j = 0; j <= smp.NVariables - cnt_columnasFijadas; j++) { // MAP: Antes 1 to nc - 1 - cnt_columnasFijadas
-		if (smp.mat[kfila_z * (smp.NRestricciones + 1) + j] > maxval) {
-			maxval = smp.mat[kfila_z * (smp.NRestricciones + 1) + j];
+		if (smp.mat[kfila_z * (smp.NVariables + 1) + j] > maxval) {
+			maxval = smp.mat[kfila_z * (smp.NVariables + 1) + j];
 			ires = j;
 		}
 	}
@@ -916,20 +916,20 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 		// b(i) >= 0 para todo i / cnt_RestriccionesRedundantes < i < kmax-1
 		// Buscamos la fila i que tenga el maximo b(i)/a(i,q) con a(i,q) < 0
 		// aiq:= e( i, q );
-		a_iq = smp.mat[i * (smp.NRestricciones + 1) + q];
+		a_iq = smp.mat[i * (smp.NVariables + 1) + q];
 		if (a_iq >  CasiCero_Simplex) { // Si es positivo, verificamos si se trata de una x y entonces agregamos la fantasma.
 			ix = -smp.left[i];
 			if ((ix > 0) && (abs(smp.flg_x[ix - 1]) ==1)) { // MAP: Agrego -1 para correr el indice a la indexacion desde 0 
 				// La variable en la fila i tiene cota superior, hay que probar con el cambio de variable
 				a_iq = -a_iq;
-				a_it = smp.x_sup[ix] - smp.mat[i * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+				a_it = smp.x_sup[ix] - smp.mat[i * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				xFantasma_fila = true;
 				esCandidato = true;
 			} else {
 				esCandidato = false;
 			}
 		} else if (a_iq < -CasiCero_Simplex) { // Si es negativo es candidato
-			a_it = smp.mat[i * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+			a_it = smp.mat[i * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 			esCandidato = true;
 			xFantasma_fila = false;
 		} else {
@@ -938,7 +938,7 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 
 
 		if (esCandidato) { // Considero el coeficiente para elegir el pivote
-			abs_a_pq = abs(smp.mat[i * (smp.NRestricciones + 1) + q]); // MAP: Cambio abs( e( i, q ) ); por abs(smp.mat[i][q]));
+			abs_a_pq = abs(smp.mat[i * (smp.NVariables + 1) + q]); // MAP: Cambio abs( e( i, q ) ); por abs(smp.mat[i][q]));
 			/*
 			se supone que a_iq < 0 y a_iq_DelMejor < 0 pues sino no son candidatos.
 			El término independiente de cualquier fila k, se transformará al usar a_iq como pivote
@@ -989,8 +989,8 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 				// su factibilidad en caso de pivotear con otra.
 				// En la fila kmax el aiq es positivo, pues fue elegido con locate_zpos
 				//      aiq:= -e(kmax, q);
-				a_iq = -smp.mat[kmax * (smp.NRestricciones + 1) + q];
-				a_it = smp.x_sup[ix - 1] - smp.mat[kmax * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+				a_iq = -smp.mat[kmax * (smp.NVariables + 1) + q];
+				a_it = smp.x_sup[ix - 1] - smp.mat[kmax * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				abs_a_pq = abs(a_iq);
 				printf("%s\n", "aiq >= 0 en tsimplex.mejorpivote");
 				assert(a_iq < 0);
@@ -1015,8 +1015,8 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 		// por eso estamos tratando de optimizar chequeando kmax para volverla
 		// factible.
 		// Agregamos entonces la posibilidad de pivotear con kmax como forma de volverla factible.
-		a_iq = smp.mat[kmax * (smp.NRestricciones + 1) + q];
-		a_it = smp.mat[kmax * (smp.NRestricciones + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+		a_iq = smp.mat[kmax * (smp.NVariables + 1) + q];
+		a_it = smp.mat[kmax * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 		xFantasma_fila = false;
 		abs_a_pq = abs(a_iq);
 		if (p < 0) { // Es el primer candidato
@@ -1052,8 +1052,8 @@ bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q) {
 		
 		// MAP: Aca el codigo original esta dividido en 3 casos segun las restricciones redundantes y la variable de compilacion MODIFICAR_REDUNDANTES, como nosotros consideramos la variable siempre activa concateno todo en un caso con un unico for
 		for (kfil = 0; kfil <= smp.NRestricciones; kfil++) { // MAP: Antes 1 to cnt_RestriccionesRedundantes
-			smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables] = smp.mat[kfil * (smp.NRestricciones + 1) + smp.NVariables] + smp.mat[kfil * (smp.NRestricciones + 1) + q] * xsup; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
-			smp.mat[kfil * (smp.NRestricciones + 1) + q] = -smp.mat[kfil * (smp.NRestricciones + 1) + q];
+			smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables] = smp.mat[kfil * (smp.NVariables + 1) + smp.NVariables] + smp.mat[kfil * (smp.NVariables + 1) + q] * xsup; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+			smp.mat[kfil * (smp.NVariables + 1) + q] = -smp.mat[kfil * (smp.NVariables + 1) + q];
 		}
 
 		res = true;
@@ -1102,13 +1102,13 @@ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_Res
 		nuevo_ti;
 
 	// apq:= e(p, q);
-	apq = smp.mat[p * (smp.NRestricciones + 1) + q];
+	apq = smp.mat[p * (smp.NVariables + 1) + q];
 	// if ( apq  <= AsumaCero) then
 	if (abs(apq) <= AsumaCero) { // rch@202012081043 agrego el abs()
 		return false;
 	} else {
 		// alfa_p:= -e( p, jti ) / apq;
-		alfa_p = -smp.mat[p * (smp.NRestricciones + 1) + jti] / apq;
+		alfa_p = -smp.mat[p * (smp.NVariables + 1) + jti] / apq;
 		ix = -smp.top[q];
 		if (ix > 0) { // la col q es una x
 			if (smp.flg_x[ix - 1] != 0) {  // tiene manejo de cotasup, MAP: Agrego -1 para correr el indice a la indexacion desde 0 
@@ -1124,9 +1124,9 @@ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_Res
 		
 		for (k = cnt_RestriccionesRedundantes; k < p; k++) { // MAP: cnt_RestriccionesRedundantes + 1 to p - 1, p ya viene con el indice ajustado a la indexacion desde 0
 			// akq = e(k, q);
-			akq = smp.mat[k * (smp.NRestricciones + 1) + q];
+			akq = smp.mat[k * (smp.NVariables + 1) + q];
 			// nuevo_ti = e(k,jti) + akq * alfa_p;
-			nuevo_ti = smp.mat[k * (smp.NRestricciones + 1) + jti] + akq * alfa_p;
+			nuevo_ti = smp.mat[k * (smp.NVariables + 1) + jti] + akq * alfa_p;
 			if (nuevo_ti < -CasiCero_Simplex) {
 				return false;
 			} else {
