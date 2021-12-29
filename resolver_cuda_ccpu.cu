@@ -214,7 +214,6 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 					}
 				}
 				if (!buscando) {
-					printf("fijarVariables intercambioColumnas%d, %d\n", kColumnas, kPrimeraLibre);
 					intercambioColumnas(smp, kColumnas, kPrimeraLibre);
 					kPrimeraLibre--;
 					cnt_fijadas++;
@@ -223,8 +222,6 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 				}
 			}
 		}
-		
-		return false;
 
 		// Se inicializa en la fila anterior a la ultima fijada
 		kFilaAFijar = cnt_RestriccionesRedundantes - 1; // MAP: Agreo -1
@@ -276,8 +273,6 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 			}
 		}
 	}
-	
-	printf("FijarVariables estado final: %d, %d, %d, %d \n", cnt_columnasFijadas, cnt_fijadas, kPrimeraLibre, mejorColumnaParaCambiarFila);
 	
 	return true;
 
@@ -350,7 +345,7 @@ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	// actualizo_iitop(jcol);
 	// actualizo_iileft(kfil);
 
-  return true;
+	return true;
  }
 
 /*
@@ -469,8 +464,6 @@ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varf
 	string mensajeDeError;
 
 	cnt_acomodadas = cnt_columnasFijadas - cnt_varfijas;
-	
-	return 0;
 
 	// Muevo las igualdades que esten en columnas al lado derecho junto con las FIJADAS
 	iColumna = smp.NVariables - cnt_columnasFijadas - 1; // MAP: Indice modificado, cambio nc por smp.NVariables 
@@ -598,7 +591,6 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 		filaPiv, colPiv;
 	double  maxVal, m;
 	
-	printf("Going well 2.3.1.1 \n");
 	// Tengo todas las igualdades en columnas al final y las igualdades en filas al principio
 	columnasLibres = smp.NVariables - cnt_columnasFijadas; // MAP: remuevo -1 ya que smp.NVariables = nc - 1 
 	for (iColumna = 0; iColumna < columnasLibres; iColumna++) { // MAP: Originalmente 1 to columnasLibres
