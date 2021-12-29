@@ -36,7 +36,7 @@ begin
   simplex_pascal := TMIPSimplex.CreateFromArchiXLT(ParamStr(1));
   pasres := simplex_pascal.resolver;
   writeLn('Pascal result: ' + IntToStr(pasres));
-  simplex_pascal.DumpSistemaToXLT_('sistemaResuelto_pascal.xlt','');
+  //simplex_pascal.DumpSistemaToXLT_('sistemaResuelto_pascal.xlt',''); El DUMP se hace en usimplex jsuto despues de tirar el usimplex.resolver pq despues hace otras cosas y cambia los datos en la estructura
   writeLn('FREE pascal');
   simplex_pascal.Free;
 
