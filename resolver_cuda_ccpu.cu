@@ -708,7 +708,7 @@ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes
 			cnt_RestrInfactibles++;
 			// while (e(nf-cnt_RestrInfactibles, nc ) < 0)
 			// MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice, idem para nc	
-			while ((smp.mat[smp.NRestricciones - cnt_RestrInfactibles * (smp.NVariables + 1) + smp.NVariables] < 0) && (kfil < (smp.NRestricciones - cnt_RestrInfactibles))) {
+			while ((smp.mat[(smp.NRestricciones - cnt_RestrInfactibles) * (smp.NVariables + 1) + smp.NVariables] < 0) && (kfil < (smp.NRestricciones - cnt_RestrInfactibles))) {
 				cnt_RestrInfactibles++;
 			}
 			if (kfil < (smp.NRestricciones - cnt_RestrInfactibles)) { // MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice
