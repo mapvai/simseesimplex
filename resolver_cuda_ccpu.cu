@@ -786,9 +786,9 @@ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_col
 		// Nos planteamos el problema de optimización con objetivo el valor de la restricción violada
 		if (cnt_RestrInfactibles > 0) {
 			qpiv = locate_zpos(smp, pFilaOpt, cnt_columnasFijadas);
-			if (qpiv > 0) {
+			if (qpiv >= 0) { // MAP: Antes > 0, pero con el corrimiento de indice queda >=
 				ppiv = mejorpivote(smp, qpiv, pFilaOpt, filaFantasma, colFantasma, true, cnt_RestriccionesRedundantes);
-				if (ppiv < 1) {
+				if (ppiv < 0) { // MAP: Antes < 1, pero con el corrimiento de indice queda < 0
 					res = -1; // ShowMessage('No encontre pivote bueno ');
 				} else {
 					if (!colFantasma) {
