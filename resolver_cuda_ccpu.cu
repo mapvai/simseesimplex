@@ -914,7 +914,7 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 			if ((ix > 0) && (abs(smp.flg_x[ix - 1]) ==1)) { // MAP: Agrego -1 para correr el indice a la indexacion desde 0 
 				// La variable en la fila i tiene cota superior, hay que probar con el cambio de variable
 				a_iq = -a_iq;
-				a_it = smp.x_sup[ix] - smp.mat[i * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
+				a_it = smp.x_sup[ix - 1] - smp.mat[i * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				xFantasma_fila = true;
 				esCandidato = true;
 			} else {
@@ -976,7 +976,7 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 		i = kmax;
 		ix = -smp.left[kmax];
 		if (ix > 0) {  // Es una fila "x"
-			if ( abs(smp.flg_x[ix] ) == 1) {   // tiene manejo de cota superior
+			if ( abs(smp.flg_x[ix - 1] ) == 1) {   // tiene manejo de cota superior
 				// agregamos su fila fantasma como una más candidata a pivotear y a controlar
 				// su factibilidad en caso de pivotear con otra.
 				// En la fila kmax el aiq es positivo, pues fue elegido con locate_zpos
@@ -984,7 +984,7 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 				a_iq = -smp.mat[kmax * (smp.NVariables + 1) + q];
 				a_it = smp.x_sup[ix - 1] - smp.mat[kmax * (smp.NVariables + 1) + smp.NVariables]; // MAP: Cambio nc por smp.NVariables, dado que nc = smp.NVariables - 1 entonce ajusta el indice
 				abs_a_pq = abs(a_iq);
-				printf("%s\n", "aiq >= 0 en tsimplex.mejorpivote");
+				if (a_iq >= 0) printf("%s\n", "aiq >= 0 en tsimplex.mejorpivote");
 				assert(a_iq < 0);
 				// static_assert(a_iq < 0, "aiq >= 0 en tsimplex.mejorpivote");
 				//      b_:= x_sup.pv[ix] - e(kmax, nc);
@@ -1163,7 +1163,7 @@ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRed
 			}
 			res = 1;
 		} else {
-			printf("%s\n", "Si Es FantasmaDeCol tenía que ser ppiv = qpiv");
+			if (ppiv != qpiv) printf("%s\n", "Si Es FantasmaDeCol tenía que ser ppiv = qpiv");
 			assert(ppiv == qpiv);
 			//static_assert(ppiv = qpiv , "Si Es FantasmaDeCol tenía que ser ppiv = qpiv");
 			cambio_var_cota_sup_en_columna(smp, ppiv);
