@@ -1145,9 +1145,9 @@ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRed
 
 	// cnt_paso++;
 	qpiv = locate_zpos(smp, smp.NRestricciones, cnt_columnasFijadas); // MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice
-	if (qpiv > 0) {
+	if (qpiv >= 0) { // MAP: Antes > 0, pero con el corrimiento de indice queda >=
 		ppiv = mejorpivote(smp, qpiv, smp.NRestricciones, filaFantasma, colFantasma, false, cnt_RestriccionesRedundantes); // MAP: Cambio nf por smp.NRestricciones, dado que nf = smp.NRestricciones - 1 entonce ajusta el indice
-		if (ppiv < 1) {
+		if (ppiv < 0) { // MAP: Antes < 1, pero con el corrimiento de indice queda < 0
 			return -1;
 		}
 		
@@ -1164,7 +1164,7 @@ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRed
 			res = 1;
 		} else {
 			printf("%s\n", "Si Es FantasmaDeCol tenía que ser ppiv = qpiv");
-			assert(ppiv = qpiv);
+			assert(ppiv == qpiv);
 			//static_assert(ppiv = qpiv , "Si Es FantasmaDeCol tenía que ser ppiv = qpiv");
 			cambio_var_cota_sup_en_columna(smp, ppiv);
 			res = 1;
