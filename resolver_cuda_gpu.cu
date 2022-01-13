@@ -2,16 +2,15 @@
 #include <math.h>
 #include "tsimplexgpus.h"
 
+#define BLOCK_SIZE 32
+
 const double CasiCero_Simplex = 1.0E-7;
 const double CasiCero_Simplex_CotaSup = CasiCero_Simplex * 1.0E+3;
 const double CasiCero_CajaLaminar = 1.0E-30;
 const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Double, CONFIRMAR SI ESTO ES CORRECTO (double 64 bits, 11 exponente y 53 mantisa, 53 log10(2) ≈ 15.955 => 2E−53 ≈ 1.11 × 10E−16 => EPSILON  ≈ 1.0E-16)
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
-
-
-
-__device__ void resolver_cpu(TSimplexGPUs &simplex) ;
+__device__ void resolver_gpu(TSimplexGPUs &simplex) ;
 __device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
@@ -37,24 +36,9 @@ __device__ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, 
 __device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 
 
-
 __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array, int NTrayectorias) {
-	int i = blockDim.x*blockIdx.x + threadIdx.x;
-	int NRestricciones = simplex_array[i].NRestricciones;
-	int NVariables = simplex_array[i].NVariables;
-
 	
-	for (int kRestriccion = 0; kRestriccion < NRestricciones+1; kRestriccion++) {
-		for (int kVariable = 0; kVariable < NVariables+1; kVariable++) {
-			resolver_cpu(simplex_array[i]);			
-    	}
-	}
-	
-	/*for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		resolver_cpu(simplex_array[kTrayectoria]);
-	}*/
-	
-	
+	if (threadIdx.x == 0) /*uso solo el primer hilo del bloque por ahora*/ resolver_gpu(simplex_array[blockIdx.x]);
 	
 } 
 
@@ -79,41 +63,25 @@ TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 		h_simplex_array[kTrayectoria].cnt_varfijas = cnt_varfijas;
 		h_simplex_array[kTrayectoria].cnt_RestriccionesRedundantes = cnt_RestriccionesRedundantes;
 
-		cudaMemcpy(h_simplex_array[kTrayectoria].x_inf, simplex_array[kTrayectoria].x_inf, NVariables*sizeof(double),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].x_sup, simplex_array[kTrayectoria].x_sup, NVariables*sizeof(double),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].flg_x, simplex_array[kTrayectoria].flg_x,
-NVariables*sizeof(char),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].top, simplex_array[kTrayectoria].top,
-NVariables*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].flg_y, simplex_array[kTrayectoria].flg_y,
-NRestricciones*sizeof(char),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].left, simplex_array[kTrayectoria].left,
-NRestricciones*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(h_simplex_array[kTrayectoria].lstvents, simplex_array[kTrayectoria].lstvents,
-NEnteras*sizeof(int),cudaMemcpyHostToDevice);
-        cudaMemcpy(h_simplex_array[kTrayectoria].lstAcoplesVEnts,
-simplex_array[kTrayectoria].lstAcoplesVEnts,
-2*NEnteras*sizeof(char),cudaMemcpyHostToDevice);
-        cudaMemcpy(h_simplex_array[kTrayectoria].mat, simplex_array[kTrayectoria].mat, 
-			  (NVariables + 1)*(NRestricciones + 1)*sizeof(double),cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].x_inf, simplex_array[kTrayectoria].x_inf, NVariables*sizeof(double), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].x_sup, simplex_array[kTrayectoria].x_sup, NVariables*sizeof(double), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].flg_x, simplex_array[kTrayectoria].flg_x, NVariables*sizeof(char), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].top, simplex_array[kTrayectoria].top, NVariables*sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].flg_y, simplex_array[kTrayectoria].flg_y, NRestricciones*sizeof(char), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].left, simplex_array[kTrayectoria].left, NRestricciones*sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(h_simplex_array[kTrayectoria].lstvents, simplex_array[kTrayectoria].lstvents, NEnteras*sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(h_simplex_array[kTrayectoria].lstAcoplesVEnts, simplex_array[kTrayectoria].lstAcoplesVEnts, 2*NEnteras*sizeof(char), cudaMemcpyHostToDevice);
+        cudaMemcpy(h_simplex_array[kTrayectoria].mat, simplex_array[kTrayectoria].mat, (NVariables + 1)*(NRestricciones + 1)*sizeof(double), cudaMemcpyHostToDevice);
 	}
-
-
-// PRUEBASSSS
-
-//for (int kRestriccion = 0; kRestriccion < NRestricciones + 1; kRestriccion++) {
-//	for (int kVariable = 0; kVariable < NVariables + 1; kVariable++) {
-//		printf("%f \n", simplex_array[0].mat[kRestriccion*(NVariables+1) + kVariable]);
-//	} 
-//}
-
-// ##############################################
-
-
 
 	cudaMemcpy(d_simplex_array, h_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyHostToDevice);
 	
-	kernel_resolver<<<NTrayectorias,1>>>(d_simplex_array, NTrayectorias);
+	// Configuro la grilla 
+	const dim3 DimGrida(NTrayectorias, 1);
+	const dim3 DimBlocka(BLOCK_SIZE, 1);
+
+	// Ejecuto el kernel
+	kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, NTrayectorias);
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyDeviceToHost);
@@ -130,39 +98,22 @@ simplex_array[kTrayectoria].lstAcoplesVEnts,
 		simplex_array[kTrayectoria].NRestricciones = NRestricciones;		
 		simplex_array[kTrayectoria].cnt_varfijas = cnt_varfijas;
 		simplex_array[kTrayectoria].cnt_RestriccionesRedundantes = cnt_RestriccionesRedundantes;
-		cudaMemcpy(simplex_array[kTrayectoria].x_inf, h_simplex_array[kTrayectoria].x_inf, NVariables*sizeof(double),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].x_sup, h_simplex_array[kTrayectoria].x_sup, NVariables*sizeof(double),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].flg_x, h_simplex_array[kTrayectoria].flg_x,
-NVariables*sizeof(char),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].top,   h_simplex_array[kTrayectoria].top,
-NVariables*sizeof(int),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].flg_y, h_simplex_array[kTrayectoria].flg_y,
-NRestricciones*sizeof(char),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].left,  h_simplex_array[kTrayectoria].left,
-NRestricciones*sizeof(int),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].lstvents,  h_simplex_array[kTrayectoria].lstvents,
-NEnteras*sizeof(int),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].lstAcoplesVEnts,
-h_simplex_array[kTrayectoria].lstAcoplesVEnts,
-2*NEnteras*sizeof(char),cudaMemcpyDeviceToHost);
-		cudaMemcpy(simplex_array[kTrayectoria].mat, h_simplex_array[kTrayectoria].mat,
-                          (NVariables + 1)*(NRestricciones + 1)*sizeof(double),cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].x_inf, h_simplex_array[kTrayectoria].x_inf, NVariables*sizeof(double), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].x_sup, h_simplex_array[kTrayectoria].x_sup, NVariables*sizeof(double), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].flg_x, h_simplex_array[kTrayectoria].flg_x, NVariables*sizeof(char), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].top,   h_simplex_array[kTrayectoria].top, NVariables*sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].flg_y, h_simplex_array[kTrayectoria].flg_y, NRestricciones*sizeof(char), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].left,  h_simplex_array[kTrayectoria].left, NRestricciones*sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].lstvents,  h_simplex_array[kTrayectoria].lstvents, NEnteras*sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].lstAcoplesVEnts, h_simplex_array[kTrayectoria].lstAcoplesVEnts, 2*NEnteras*sizeof(char), cudaMemcpyDeviceToHost);
+		cudaMemcpy(simplex_array[kTrayectoria].mat, h_simplex_array[kTrayectoria].mat, (NVariables + 1)*(NRestricciones + 1)*sizeof(double), cudaMemcpyDeviceToHost);
 	}	
 
 }
 
+/**************************************************************************************************************************************************************************************************/
 
-
-/********************************************************************************/
-/********************************************************************************/
-/********************************************************************************/
-/********************************************************************************/
-
-
-
-
-
-__device__ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
+__device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
 	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
