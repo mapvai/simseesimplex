@@ -11,30 +11,30 @@ const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 
 
-void resolver_cpu(TSimplexGPUs &simplex) ;
-int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
-void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
-bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
-bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
-void actualizo_iitop(TSimplexGPUs &smp, int k);
-void actualizo_iileft(TSimplexGPUs &smp, int k) ;
-void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2);
-void intercambioFilas(TSimplexGPUs &smp, int k1, int k2);
-int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta);
-bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_variablesLiberadas);
-int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes, int cnt_igualdades);
-bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma);
-int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int IgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
-int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles);
-void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila);
-int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
-int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas);
-void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xFantasma_fila); // Esta funcion es interna, no se necesita declarar aca?
-int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt, int cnt_RestriccionesRedundantes);
-bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q);
-int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt_RestriccionesRedundantes);
-bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes);
-int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+__device__ void resolver_cpu(TSimplexGPUs &simplex) ;
+__device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
+__device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
+__device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+__device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
+__device__ void actualizo_iitop(TSimplexGPUs &smp, int k);
+__device__ void actualizo_iileft(TSimplexGPUs &smp, int k) ;
+__device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2);
+__device__ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2);
+__device__ int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta);
+__device__ bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_variablesLiberadas);
+__device__ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes, int cnt_igualdades);
+__device__ bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma);
+__device__ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int IgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+__device__ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles);
+__device__ void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila);
+__device__ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
+__device__ int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas);
+__device__ void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xFantasma_fila); // Esta funcion es interna, no se necesita declarar aca?
+__device__ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt, int cnt_RestriccionesRedundantes);
+__device__ bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q);
+__device__ int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt_RestriccionesRedundantes);
+__device__ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes);
+__device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 
 
 
@@ -49,6 +49,10 @@ __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array, int NTrayectoria
 			resolver_cpu(simplex_array[i]);			
     	}
 	}
+	
+	/*for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
+		resolver_cpu(simplex_array[kTrayectoria]);
+	}*/
 	
 	
 	
@@ -109,7 +113,7 @@ simplex_array[kTrayectoria].lstAcoplesVEnts,
 
 	cudaMemcpy(d_simplex_array, h_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyHostToDevice);
 	
-	kernel_resolver<<<1,NTrayectorias>>>(d_simplex_array, NTrayectorias);
+	kernel_resolver<<<NTrayectorias,1>>>(d_simplex_array, NTrayectorias);
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyDeviceToHost);
@@ -257,7 +261,7 @@ __device__ void resolver_cpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 
 // Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
 // retorna la cantidad de cajas fijadas.
-int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
+__device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 	int res = 0;
 	
 	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1
@@ -278,7 +282,7 @@ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 }
 
 
-void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) {
+__device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) {
     while ((cnt_fijadas < cnt_varfijas) && 
 		(((smp.top[kPrimeraLibre] < 0) && (abs(smp.flg_x[-smp.top[kPrimeraLibre]]) == 2)) || ((smp.top[kPrimeraLibre] > 0) && (abs(smp.flg_y[smp.top[kPrimeraLibre]]) == 2)))) {
 		if (smp.top[kPrimeraLibre] < 0) {
@@ -290,7 +294,7 @@ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijada
 }
 
 
-bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
+__device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 
 	int kColumnas, mejorColumnaParaCambiarFila, kFor, kFilaAFijar, cnt_fijadas, kPrimeraLibre;
 	double mejorAkFilai;
@@ -383,7 +387,7 @@ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijada
 }
 
 
-bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
+__device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 
 	double m, piv, invPiv;
 	int k, j;
@@ -474,7 +478,7 @@ void actualizo_iileft(TSimplexGPUs &smp, int k) {
 }
 */
 
-void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
+__device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 
 	int k;
 	double m;
@@ -493,7 +497,7 @@ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 	// actualizo_iitop(smp, j2);
 }
 
-void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
+__device__ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
   
 	int j;
 	double m;
@@ -516,7 +520,7 @@ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
  // Atención esto funciona porque suponemos que el Simplex está en su estado Natural.
  // a lo sumo se conmutaron algunas columnas para fijar variables.
  // MAP: se usa solo dentro de enfilarVariablesLibres
-int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta) {
+__device__ int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta) {
 	
 	double a;
 	int iFil, res;
@@ -533,7 +537,7 @@ int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFila
  }
 
 
-bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_variablesLiberadas) {
+__device__ bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt_RestriccionesRedundantes, int &cnt_variablesLiberadas) {
 
 	int jVar, iFil, jCol;
 
@@ -558,7 +562,7 @@ bool enfilarVariablesLibres(TSimplexGPUs &smp, int cnt_columnasFijadas, int &cnt
 }
 
 
-int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes, int cnt_igualdades) {
+__device__ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varfijas, int &cnt_RestriccionesRedundantes, int cnt_igualdades) {
 	int res, cnt_acomodadas, iFila, iColumna, 
 		nIgualdadesResueltas, nIgualdadesAResolver, 
 		iFilaLibre, iFilaAcomodando;
@@ -662,7 +666,7 @@ int resolverIgualdades(TSimplexGPUs &smp, int &cnt_columnasFijadas, int cnt_varf
 
 
 // Indica si la restricción en kfila esta siendo cumplida
-bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
+__device__ bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
 	
 	int ix;
 	// if e(kfila, nc) < -CasiCero_Simplex then
@@ -690,7 +694,7 @@ bool filaEsFactible(TSimplexGPUs &smp, int kfila, bool &fantasma) {
 }
 
 
-int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
+__device__ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, int * nCerosFilas, int * nCerosCols, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 
 	int iFila, iColumna, columnasLibres,
 		filaPiv, colPiv;
@@ -763,7 +767,7 @@ int pasoBuscarFactibleIgualdad4(TSimplexGPUs &smp, int nIgualdadesNoResueltas, i
 	}	
 }
 
-int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles) {
+__device__ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes, int &cnt_RestrInfactibles) {
 
 	int kfil, ix;
 	double rval;
@@ -825,7 +829,7 @@ int reordenarPorFactibilidad(TSimplexGPUs &smp, int cnt_RestriccionesRedundantes
 	return cnt_RestrInfactibles;
 }
 
-void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila) {
+__device__ void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila) {
 	int ix, k;
 	/*
 		Realizamos el cambio de variable x'= x_sup - x para que la restricción
@@ -850,7 +854,7 @@ void cambiar_borde_de_caja(TSimplexGPUs &smp, int k_fila) {
 }
 
 
-int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
+__device__ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 	
 	int pFilaOpt, ppiv, qpiv, ix, res;
 	double rval;
@@ -939,7 +943,7 @@ int pasoBuscarFactible(TSimplexGPUs &smp, int &cnt_RestrInfactibles, int cnt_col
 
 // Buscamos la columna que en la ultima fila (fila z) tenga el valor positivo mas grande retorna el número de columna si lo encontro, -1 si son todos < 0
 // Este paso se da en el Simplex para minimizar, en el de maximizar busca el menos negativo
-int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas) {
+__device__ int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas) {
 	int j, ires;
 	double maxval;
 	ires = -1;
@@ -955,7 +959,7 @@ int locate_zpos(TSimplexGPUs &smp, int kfila_z, int cnt_columnasFijadas) {
 
 
 // MAP: Este procedimeinto es interno al procedimiento mejorpivote. ESTE PROCEDIMIENTO HABRIA QUE ELIMINARLO Y PEGAR EL CODIGO DIRECTO EN mejorpivote
-void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xFantasma_fila) {
+__device__ void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool &filaFantasma, bool &colFantasma, double a_iq, double a_it, int i, bool xFantasma_fila) {
   a_iq_DelMejor = a_iq;
   a_it_DelMejor = a_it;
   p = i;
@@ -964,7 +968,7 @@ void capturarElMejor(double &a_iq_DelMejor, double &a_it_DelMejor, int &p, bool 
 }
 
 
-int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt, int cnt_RestriccionesRedundantes) {
+__device__ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &colFantasma, bool checkearFilaOpt, int cnt_RestriccionesRedundantes) {
   
 	int i, p, ix;
 	double a_iq, a_it, abs_a_pq,
@@ -1131,7 +1135,7 @@ int mejorpivote(TSimplexGPUs &smp, int q, int kmax, bool &filaFantasma, bool &co
 }
 
 
-bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q) {
+__device__ bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q) {
 
 	int ix, kfil;
 	double xsup;
@@ -1167,7 +1171,7 @@ bool cambio_var_cota_sup_en_columna(TSimplexGPUs &smp, int q) {
 }
 
 
-int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt_RestriccionesRedundantes) {
+__device__ int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt_RestriccionesRedundantes) {
 	int mejorq, q;
 	double max_apq, apq;
 
@@ -1193,7 +1197,7 @@ El valor retornado apq, es e(p,q) y puede usarse para
 elegir el q que devuelva el valor más grande para disminuir los
 errores numéricos.
 */
-bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes) {
+__device__ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes) {
 	int k, ix;
 	double alfa_p, akq,
 		nuevo_ti;
@@ -1242,7 +1246,7 @@ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_Res
 }
 
 
-int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
+__device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes) {
 
 	int ppiv, qpiv,
 		res;
