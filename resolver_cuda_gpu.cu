@@ -11,7 +11,7 @@ const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Doubl
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 __device__ void resolver_gpu(TSimplexGPUs &simplex) ;
-__device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
+__device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 __device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
@@ -38,7 +38,7 @@ __device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_Restr
 
 __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array, int NTrayectorias) {
 	
-	if (threadIdx.x == 0) /*uso solo el primer hilo del bloque por ahora*/ resolver_gpu(simplex_array[blockIdx.x]);
+	resolver_gpu(simplex_array[blockIdx.x]);
 	
 } 
 
@@ -115,21 +115,37 @@ TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 
 __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	int res;
-	int cnt_columnasFijadas = 0; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	int result = 0;
+	__shared__ int cnt_columnasFijadas; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	// int cnt_varfijas = 0; // Cantidad de variables fijadas, esta variable esta en la estructura Simplex
 	// simplex.cnt_varfijas = 0; // Esto viene al cargarse la estructura
-	int cnt_RestrInfactibles = 0;
-	int cnt_variablesLiberadas = 0;
+	__shared__ int cnt_RestrInfactibles;
+	__shared__ int cnt_variablesLiberadas;
 	//string mensajeDeError;
 	// MAP: Agrego este codigo para calcular las restricciones de igualdad
-	int cnt_igualdades = 0;
-	for (int i = 0; i <= simplex.NRestricciones; i++) {
+	__shared__ int cnt_igualdades;
+	
+	if (threadIdx.x == 0)  {
+		cnt_columnasFijadas = 0;
+		cnt_RestrInfactibles = 0;
+		cnt_variablesLiberadas = 0;
+		cnt_igualdades = 0;
+	}
+	
+	__syncthreads();
+	
+	// Paralelizacion 1
+	for (int i = threadIdx.x; i <= simplex.NRestricciones; i += BLOCK_SIZE) {
 		if (simplex.flg_y[i] == 2) {
-			cnt_igualdades++;
+			atomicAdd(&cnt_igualdades, 1);
 		}
 	}
 	
+	__syncthreads();
+	
+	// A partir de aqui trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
+		
 	fijarCajasLaminares(simplex, simplex.cnt_varfijas);
 
 	// Fijamos las variables que se hayan declarado como constantes.
@@ -207,13 +223,14 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 		
 	result = res;
 	printf("%s: %d\n", "Finish, result = ", result);
+	
+	} // Fin trabaja solo el primer hilo
 }
 
 
 // Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
 // retorna la cantidad de cajas fijadas.
-__device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
-	int res = 0;
+__device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 	
 	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1
 		// printf("in fijarCajasLaminares: i, flg_x[i], x_inf[i], x_sup[i] = %d, %d, %g, %g \n", i, smp.flg_x[i], smp.x_inf[i], smp.x_sup[i]);
@@ -225,11 +242,9 @@ __device__ int fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 					smp.flg_x[i] = 2;
 				}
 				cnt_varfijas++;
-				res++;
 			}
 		}
 	}
-    return res;
 }
 
 
