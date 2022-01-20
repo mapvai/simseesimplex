@@ -14,7 +14,7 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) ;
 __device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
-__device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
+__device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
 __device__ void actualizo_iitop(TSimplexGPUs &smp, int k);
 __device__ void actualizo_iileft(TSimplexGPUs &smp, int k) ;
 __device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2);
@@ -264,7 +264,7 @@ __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_col
 
 	int kColumnas, mejorColumnaParaCambiarFila, kFor, kFilaAFijar, cnt_fijadas, kPrimeraLibre;
 	double mejorAkFilai;
-	bool buscando, pivoteoConUnaFijada;
+	bool buscando;
 
 	if (cnt_varfijas > 0) {
 		cnt_fijadas = 0;
@@ -321,7 +321,6 @@ __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_col
 					}
 				}
 
-				pivoteoConUnaFijada = false;
 				// dv@20191226 Si el término independiente es nulo, la "restricción" es reduntante
 				// entonces la variable ya había quedado fijada
 				if (mejorAkFilai < AsumaCero) {
@@ -332,18 +331,12 @@ __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_col
 				intercambiar(smp, kFilaAFijar, mejorColumnaParaCambiarFila);
 				cnt_fijadas++;
 				
-				if (!pivoteoConUnaFijada) {
-					// dv@20200115 agrego esto porque no debería cambiar si pivoteó con una fijada
-					if (mejorColumnaParaCambiarFila != kPrimeraLibre) {
-						intercambioColumnas(smp, mejorColumnaParaCambiarFila, kPrimeraLibre);
-					}
-					cnt_columnasFijadas++;
-					kPrimeraLibre--;
-				} else {
-					if (mejorColumnaParaCambiarFila != kPrimeraLibre + 1) { // En el caso de que se pivotee con una columna fija no cambia kPrimeraLibre
-						intercambioColumnas(smp, mejorColumnaParaCambiarFila, kPrimeraLibre + 1);
-					}
+				// dv@20200115 agrego esto porque no debería cambiar si pivoteó con una fijada
+				if (mejorColumnaParaCambiarFila != kPrimeraLibre) {
+					intercambioColumnas(smp, mejorColumnaParaCambiarFila, kPrimeraLibre);
 				}
+				cnt_columnasFijadas++;
+				kPrimeraLibre--;
 			}
 		}
 	}
@@ -353,7 +346,7 @@ __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_col
 }
 
 
-__device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
+__device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 
 	double m, piv, invPiv;
 	int k, j;
@@ -419,7 +412,6 @@ __device__ bool intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	// actualizo_iitop(jcol);
 	// actualizo_iileft(kfil);
 
-	return true;
  }
 
 /*
@@ -1227,9 +1219,7 @@ __device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_Restr
 		}
 		
 		if (!colFantasma) {
-			if  (!intercambiar(smp, ppiv, qpiv)) {
-				return -1;
-			}
+			intercambiar(smp, ppiv, qpiv);
 			
 			if (filaFantasma) {
 				if (!cambio_var_cota_sup_en_columna(smp, qpiv)) {
