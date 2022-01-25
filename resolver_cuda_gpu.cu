@@ -11,7 +11,6 @@ const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Doubl
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 __device__ void resolver_gpu(TSimplexGPUs &simplex) ;
-__device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas);
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
@@ -141,10 +140,21 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 		}
 	}
 	
-	__syncthreads();
-	
-		
-	fijarCajasLaminares(simplex, simplex.cnt_varfijas);
+	// fijarCajasLaminares
+	// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
+	// Retorna la cantidad de cajas fijadas.
+	for (int i = threadIdx.x; i < simplex.NVariables; i += BLOCK_SIZE) {
+		if (abs(simplex.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
+			if (abs(simplex.x_sup[i] - simplex.x_inf[i] ) < CasiCero_CajaLaminar) {
+				if (simplex.flg_x[i] < 0) {
+					simplex.flg_x[i] = -2;
+				} else {
+					simplex.flg_x[i] = 2;
+				}
+				atomicAdd(&simplex.cnt_varfijas, 1);
+			}
+		}
+	}
 	
 	__syncthreads();
 	
@@ -230,27 +240,6 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	
 	} // Fin trabaja solo el primer hilo
 }
-
-
-// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
-// Retorna la cantidad de cajas fijadas.
-__device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
-	
-	for (int i = threadIdx.x; i < smp.NVariables; i += BLOCK_SIZE) {
-		if (abs(smp.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
-			if (abs(smp.x_sup[i] - smp.x_inf[i] ) < CasiCero_CajaLaminar) {
-				if (smp.flg_x[i] < 0) {
-					smp.flg_x[i] = -2;
-				} else {
-					smp.flg_x[i] = 2;
-				}
-				atomicAdd(&cnt_varfijas, 1);
-			}
-		}
-	}
-	
-}
-
 
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) {
     while ((cnt_fijadas < cnt_varfijas) && 
