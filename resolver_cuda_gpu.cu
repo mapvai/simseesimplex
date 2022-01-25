@@ -2,7 +2,7 @@
 #include <math.h>
 #include "tsimplexgpus.h"
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 32 //  = WARP SIZE
 
 const double CasiCero_Simplex = 1.0E-7;
 const double CasiCero_Simplex_CotaSup = CasiCero_Simplex * 1.0E+3;
@@ -143,10 +143,14 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	
 	__syncthreads();
 	
-	// A partir de aqui trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
 		
 	fijarCajasLaminares(simplex, simplex.cnt_varfijas);
+	
+	__syncthreads();
+	
+	
+	// A partir de aqui trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
 
 	// Fijamos las variables que se hayan declarado como constantes.
 	if (!fijarVariables(simplex, simplex.cnt_varfijas, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
@@ -229,11 +233,10 @@ __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 
 
 // Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
-// retorna la cantidad de cajas fijadas.
+// Retorna la cantidad de cajas fijadas.
 __device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 	
-	for (int i =  0; i < smp.NVariables; i++) { // MAP: = for 1 to nc-1
-		// printf("in fijarCajasLaminares: i, flg_x[i], x_inf[i], x_sup[i] = %d, %d, %g, %g \n", i, smp.flg_x[i], smp.x_inf[i], smp.x_sup[i]);
+	for (int i = threadIdx.x; i < smp.NVariables; i += BLOCK_SIZE) {
 		if (abs(smp.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
 			if (abs(smp.x_sup[i] - smp.x_inf[i] ) < CasiCero_CajaLaminar) {
 				if (smp.flg_x[i] < 0) {
@@ -241,10 +244,11 @@ __device__ void fijarCajasLaminares(TSimplexGPUs &smp, int &cnt_varfijas) {
 				} else {
 					smp.flg_x[i] = 2;
 				}
-				cnt_varfijas++;
+				atomicAdd(&cnt_varfijas, 1);
 			}
 		}
 	}
+	
 }
 
 
