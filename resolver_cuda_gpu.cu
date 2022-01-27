@@ -36,7 +36,7 @@ __device__ int darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_Restr
 
 __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array, int NTrayectorias) {
 	
-	resolver_gpu(simplex_array[blockIdx.x]);
+	resolver_gpu(simplex_array[threadIdx.x]);
 	
 } 
 
@@ -75,8 +75,8 @@ TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 	cudaMemcpy(d_simplex_array, h_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyHostToDevice);
 	
 	// Configuro la grilla 
-	const dim3 DimGrida(NTrayectorias, 1);
-	const dim3 DimBlocka(1, 1);
+	const dim3 DimGrida(1, 1);
+	const dim3 DimBlocka(NTrayectorias, 1);
 
 	// Ejecuto el kernel
 	kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, NTrayectorias);
