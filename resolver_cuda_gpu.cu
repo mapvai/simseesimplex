@@ -15,8 +15,6 @@ __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int 
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
 __device__ void intercambiar_multihilo(TSimplexGPUs &smp, int kfil, int jcol);
-__device__ void actualizo_iitop(TSimplexGPUs &smp, int k);
-__device__ void actualizo_iileft(TSimplexGPUs &smp, int k) ;
 __device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2);
 __device__ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2);
 __device__ int buscarMejorPivoteEnCol(TSimplexGPUs &smp, int jCol, int iFilaFrom, int iFilaHasta);
@@ -35,21 +33,33 @@ __device__ int locate_qOK(TSimplexGPUs &smp, int p, int jhasta, int jti, int cnt
 __device__ bool test_qOK(TSimplexGPUs &smp, int p, int q, int jti, double &apq, int cnt_RestriccionesRedundantes);
 __device__ void darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_RestriccionesRedundantes, int &res);
 
+__device__ void resolver_etapa_cnt_igcount(TSimplexGPUs &simplex,  TSimplexVars &d_svars) ;
+__device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars &d_svars) ;
+__device__ void resolver_gpu_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
 
-__global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array, int NTrayectorias) {
-	
+__global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array) {
 	resolver_gpu(simplex_array[blockIdx.x]);
-	
 } 
 
+__global__ void kernel_resolver_etapa_cnt_igcount(TDAOfSimplexGPUs simplex_array,  TSimplexVars * d_svars) {
+	resolver_etapa_cnt_igcount(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
+} 
 
-extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array,
-TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
+__global__ void kernel_resolver_etapa_fijar_cajlam(TDAOfSimplexGPUs simplex_array,  TSimplexVars * d_svars) {	
+	resolver_etapa_fijar_cajlam(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
+}
+
+__global__ void kernel_resolver_gpu_resto(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_gpu_resto(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
+}
+
+extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 	int NEnteras;
 	int NVariables;
 	int NRestricciones;
 	int cnt_varfijas;
 	int cnt_RestriccionesRedundantes;
+	TSimplexVars * d_svars;
 	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
 		NEnteras = simplex_array[kTrayectoria].NEnteras;
@@ -76,12 +86,25 @@ TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 
 	cudaMemcpy(d_simplex_array, h_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyHostToDevice);
 	
+	cudaMalloc(&d_svars, NTrayectorias*sizeof(TSimplexVars));
+	cudaMemset(d_svars, 0, NTrayectorias*sizeof(TSimplexVars));
+	
 	// Configuro la grilla 
 	const dim3 DimGrida(NTrayectorias, 1);
 	const dim3 DimBlocka(BLOCK_SIZE, 1);
 
 	// Ejecuto el kernel
-	kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, NTrayectorias);
+	// kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array);
+	// cudaDeviceSynchronize();
+	
+	// Ejecuto los kernels
+	kernel_resolver_etapa_cnt_igcount<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	kernel_resolver_etapa_fijar_cajlam<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	kernel_resolver_gpu_resto<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyDeviceToHost);
@@ -112,6 +135,164 @@ TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 }
 
 /**************************************************************************************************************************************************************************************************/
+
+__device__ void resolver_etapa_cnt_igcount(TSimplexGPUs &simplex,  TSimplexVars &d_svars) {
+
+	__shared__ int cnt_igualdades;
+	
+	if (threadIdx.x == 0)  {
+		cnt_igualdades = 0;
+	}
+	
+	__syncthreads();
+	
+	for (int i = threadIdx.x; i <= simplex.NRestricciones; i += BLOCK_SIZE) {
+		if (simplex.flg_y[i] == 2) {
+			atomicAdd(&cnt_igualdades, 1);
+		}
+	}
+	
+	__syncthreads();
+	
+	if (threadIdx.x == 0)  {
+		d_svars.cnt_igualdades = cnt_igualdades;
+	}
+}
+
+// fijarCajasLaminares()
+__device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars &d_svars) {
+	// simplex.cnt_varfijas = 0; // Esto viene al cargarse la estructura
+	// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
+	// Retorna la cantidad de cajas fijadas.
+	for (int i = threadIdx.x; i < simplex.NVariables; i += BLOCK_SIZE) {
+		if (abs(simplex.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
+			if (abs(simplex.x_sup[i] - simplex.x_inf[i] ) < CasiCero_CajaLaminar) {
+				if (simplex.flg_x[i] < 0) {
+					simplex.flg_x[i] = -2;
+				} else {
+					simplex.flg_x[i] = 2;
+				}
+				atomicAdd(&simplex.cnt_varfijas, 1);
+			}
+		}
+	}
+}
+
+__device__ void resolver_gpu_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+	__shared__ int res;
+	__shared__ int cnt_columnasFijadas; // Cantidad de columnas FIJADAS x o y fija encolumnada
+	__shared__ int cnt_RestrInfactibles;
+	__shared__ int cnt_variablesLiberadas;
+	__shared__ int cnt_igualdades;
+	
+	if (threadIdx.x == 0)  {
+		cnt_columnasFijadas = d_svars.cnt_columnasFijadas;
+		cnt_RestrInfactibles = d_svars.cnt_RestrInfactibles;
+		cnt_variablesLiberadas = d_svars.cnt_variablesLiberadas;
+		cnt_igualdades = d_svars.cnt_igualdades;
+	}
+	
+	//  Trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
+		// Fijamos las variables que se hayan declarado como constantes.
+		if (!fijarVariables(simplex, simplex.cnt_varfijas, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
+			//mensajeDeError = "PROBLEMA INFACTIBLE - No fijar las variable Fijas.";
+			//printf("%s\n", mensajeDeError.c_str());
+			printf("%s\n", "PROBLEMA INFACTIBLE - No fijar las variable Fijas.");
+			res = -32;
+			return;
+		}
+	}
+	
+	//  Trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
+		if (!enfilarVariablesLibres(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, cnt_variablesLiberadas)) {
+			//mensajeDeError = "No fue posible conmutar a filas todas las variables libres";
+			//printf("%s\n", mensajeDeError.c_str());
+			printf("%s\n", "No fue posible conmutar a filas todas las variables libres");
+			res = -33;
+			return;
+		}
+	}
+	
+	//  Trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
+		if (resolverIgualdades(simplex, cnt_columnasFijadas, simplex.cnt_varfijas, simplex.cnt_RestriccionesRedundantes, cnt_igualdades) != 1) {
+			//mensajeDeError = "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.";
+			//printf("%s\n", mensajeDeError.c_str());
+			printf("%s\n", "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.");
+			res = -31;
+			return;
+		}
+	}
+	
+	lbl_inicio:
+
+	__syncthreads();
+	
+	//  Trabaja solo el primer hilo
+	if (threadIdx.x == 0)  {
+
+		reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
+		
+		res = 1;
+		
+	}
+	__syncthreads();
+	
+	if (threadIdx.x == 0)  {
+		
+		while (cnt_RestrInfactibles > 0) {
+			res = pasoBuscarFactible(simplex, cnt_RestrInfactibles, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes);
+
+			switch (res) {
+				case 0: 
+					if (cnt_RestrInfactibles > 0) {
+						//mensajeDeError = "PROBLEMA INFACTIBLE - Buscando factibilidad";
+						//printf("%s\n", mensajeDeError.c_str());
+						printf("%s\n", "PROBLEMA INFACTIBLE - Buscando factibilidad");
+						res = -10;
+						return;
+					}
+					break;
+				case  -1:
+					//mensajeDeError = "NO encontramos pivote bueno - Buscando Factibilidad";
+					//printf("%s\n", mensajeDeError.c_str());
+					printf("%s\n", "NO encontramos pivote bueno - Buscando Factibilidad");
+					res = -11;
+					return;
+				case -2:
+					//mensajeDeError = "???cnt_infactibles= 0 - Buscando Factibilidad";
+					//printf("%s\n", mensajeDeError.c_str());
+					printf("%s\n", "???cnt_infactibles= 0 - Buscando Factibilidad");
+					res = -12;
+					return;
+			}
+		}
+	}
+	
+	__syncthreads();
+
+		
+	while (res == 1) {
+		darpaso(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, res);
+		__syncthreads();
+		if (res == -1) {
+			//mensajeDeError = "Error -- NO encontramos pivote bueno dando paso";
+			//printf("%s\n", mensajeDeError.c_str());
+			printf("%s\n", "Error -- NO encontramos pivote bueno dando paso");
+			res = -21;
+			return;
+		}
+	}
+	  
+	if (res == 2) {
+		goto lbl_inicio;
+	}
+
+	// printf("%s: %d\n", "Finish, result = ", res);
+
+}
 
 __device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
 	__shared__ int res;
@@ -423,9 +604,6 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	smp.top[jcol] = smp.left[kfil];
 	smp.left[kfil] = k;
 
-	// actualizo_iitop(jcol);
-	// actualizo_iileft(kfil);
-
  }
  
  __device__ void intercambiar_multihilo(TSimplexGPUs &smp, int kfil, int jcol) {
@@ -495,32 +673,7 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 		smp.left[kfil] = k;
 	}
 
-	// actualizo_iitop(jcol);
-	// actualizo_iileft(kfil);
-
  }
-
-/*
-// MAP: Agrego los -1 +1 por el cambio de indices CHEQUEAR QUE ES CORRECTO
-void actualizo_iitop(TSimplexGPUs &smp, int k) {
-	// actualizo los indices iix e iiy
-	if (smp.top[k] < 0) {
-		smp.iix[-smp.top[k] - 1] = k + 1;
-	} else {
-		smp.iiy[smp.top[k] - 1] = -k - 1;
-	}
-}
-
-// MAP: Agrego los -1 +1 por el cambio de indices CHEQUEAR QUE ES CORRECTO
-void actualizo_iileft(TSimplexGPUs &smp, int k) {
-	// actualizo los indices iix e iiy
-	if (smp.left[k] > 0) {
-		smp.iiy[smp.left[k] - 1]  = k + 1; 
-	} else {
-		smp.iix[-smp.left[k] - 1]  = -k - 1;
-	}
-}
-*/
 
 __device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 
@@ -537,8 +690,6 @@ __device__ void intercambioColumnas(TSimplexGPUs &smp, int j1, int j2) {
 	smp.top[j1] = smp.top[j2];
 	smp.top[j2] = k;
 
-	// actualizo_iitop(smp, j1);
-	// actualizo_iitop(smp, j2);
 }
 
 __device__ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
@@ -555,9 +706,6 @@ __device__ void intercambioFilas(TSimplexGPUs &smp, int k1, int k2) {
 	j = smp.left[k1];
 	smp.left[k1] = smp.left[k2];
 	smp.left[k2] = j;
-
-	// actualizo_iileft(smp, k1);
-	// actualizo_iileft(smp, k2);
 
 }
 
