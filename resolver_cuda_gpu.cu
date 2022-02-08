@@ -303,24 +303,21 @@ __device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_s
 			switch (res) {
 				case 0: 
 					if (cnt_RestrInfactibles > 0) {
-						//mensajeDeError = "PROBLEMA INFACTIBLE - Buscando factibilidad";
-						//printf("%s\n", mensajeDeError.c_str());
 						printf("%s\n", "PROBLEMA INFACTIBLE - Buscando factibilidad");
 						res = -10;
+						d_svars.res = res;
 						return;
 					}
 					break;
 				case  -1:
-					//mensajeDeError = "NO encontramos pivote bueno - Buscando Factibilidad";
-					//printf("%s\n", mensajeDeError.c_str());
 					printf("%s\n", "NO encontramos pivote bueno - Buscando Factibilidad");
 					res = -11;
+					d_svars.res = res;
 					return;
 				case -2:
-					//mensajeDeError = "???cnt_infactibles= 0 - Buscando Factibilidad";
-					//printf("%s\n", mensajeDeError.c_str());
 					printf("%s\n", "???cnt_infactibles= 0 - Buscando Factibilidad");
 					res = -12;
+					d_svars.res = res;
 					return;
 			}
 		}
@@ -332,10 +329,8 @@ __device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_s
 		darpaso(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, res);
 		__syncthreads();
 		if (res == -1) {
-			//mensajeDeError = "Error -- NO encontramos pivote bueno dando paso";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "Error -- NO encontramos pivote bueno dando paso");
-			res = -21;
+			if (threadIdx.x == 0) printf("%s\n", "Error -- NO encontramos pivote bueno dando paso");
+			if (threadIdx.x == 0)  d_svars.res = -21;
 			return;
 		}
 	}
@@ -348,6 +343,8 @@ __device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_s
 		}
 		goto lbl_inicio;
 	}
+	
+	if (threadIdx.x == 0)  d_svars.res = res;
 
 	// printf("%s: %d\n", "Finish, result = ", res);
 
