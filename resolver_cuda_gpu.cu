@@ -35,7 +35,10 @@ __device__ void darpaso(TSimplexGPUs &smp, int cnt_columnasFijadas, int cnt_Rest
 
 __device__ void resolver_etapa_cnt_igcount(TSimplexGPUs &simplex,  TSimplexVars &d_svars) ;
 __device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars &d_svars) ;
-__device__ void resolver_gpu_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
+__device__ void resolver_fijar_variables(TSimplexGPUs &simplex, TSimplexVars &d_svars);
+__device__ void resolver_enfilar_variables_libres(TSimplexGPUs &simplex, TSimplexVars &d_svars);
+__device__ void resolver_igualdades(TSimplexGPUs &simplex, TSimplexVars &d_svars);
+__device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
 
 __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array) {
 	resolver_gpu(simplex_array[blockIdx.x]);
@@ -49,8 +52,20 @@ __global__ void kernel_resolver_etapa_fijar_cajlam(TDAOfSimplexGPUs simplex_arra
 	resolver_etapa_fijar_cajlam(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
 }
 
-__global__ void kernel_resolver_gpu_resto(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_gpu_resto(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
+__global__ void kernel_resolver_fijar_variables(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_fijar_variables(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+}
+
+__global__ void kernel_resolver_enfilar_variables_libres(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_enfilar_variables_libres(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+}
+
+__global__ void kernel_resolver_igualdades(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_igualdades(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+}
+
+__global__ void kernel_resolver_resto(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_resto(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
 }
 
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
@@ -60,6 +75,9 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	int cnt_varfijas;
 	int cnt_RestriccionesRedundantes;
 	TSimplexVars * d_svars;
+	
+	int maxNvariables = 0;
+	int maxNrestricciones = 0;
 	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
 		NEnteras = simplex_array[kTrayectoria].NEnteras;
@@ -72,6 +90,9 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 		h_simplex_array[kTrayectoria].NRestricciones = NRestricciones;		
 		h_simplex_array[kTrayectoria].cnt_varfijas = cnt_varfijas;
 		h_simplex_array[kTrayectoria].cnt_RestriccionesRedundantes = cnt_RestriccionesRedundantes;
+		
+		if (NVariables > maxNvariables) maxNvariables = NVariables;
+		if (NRestricciones > maxNrestricciones) maxNrestricciones = NRestricciones;
 
 		cudaMemcpy(h_simplex_array[kTrayectoria].x_inf, simplex_array[kTrayectoria].x_inf, NVariables*sizeof(double), cudaMemcpyHostToDevice);
 		cudaMemcpy(h_simplex_array[kTrayectoria].x_sup, simplex_array[kTrayectoria].x_sup, NVariables*sizeof(double), cudaMemcpyHostToDevice);
@@ -88,24 +109,61 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	
 	cudaMalloc(&d_svars, NTrayectorias*sizeof(TSimplexVars));
 	cudaMemset(d_svars, 0, NTrayectorias*sizeof(TSimplexVars));
-	
-	// Configuro la grilla 
-	const dim3 DimGrida(NTrayectorias, 1);
-	const dim3 DimBlocka(BLOCK_SIZE, 1);
 
 	// Ejecuto el kernel
 	// kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array);
 	// cudaDeviceSynchronize();
 	
+	cudaError_t err;
+	
 	// Ejecuto los kernels
-	kernel_resolver_etapa_cnt_igcount<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
+	const dim3 DimGrid_e1(NTrayectorias, 1);
+	const dim3 DimBlock_e1(maxNrestricciones, 1);
+	kernel_resolver_etapa_cnt_igcount<<< DimGrid_e1, DimBlock_e1, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
 	
-	kernel_resolver_etapa_fijar_cajlam<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 1 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e2(NTrayectorias, 1);
+	const dim3 DimBlock_e2(maxNvariables, 1);
+	kernel_resolver_etapa_fijar_cajlam<<< DimGrid_e2, DimBlock_e2, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
 	
-	kernel_resolver_gpu_resto<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array, d_svars);
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 2 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e3(1, 1);
+	const dim3 DimBlock_e3(NTrayectorias, 1);
+	kernel_resolver_fijar_variables<<< DimGrid_e3, DimBlock_e3, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 3 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e4(1, 1);
+	const dim3 DimBlock_e4(NTrayectorias, 1);
+	kernel_resolver_enfilar_variables_libres<<< DimGrid_e4, DimBlock_e4, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 4 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e5(1, 1);
+	const dim3 DimBlock_e5(NTrayectorias, 1);
+	kernel_resolver_igualdades<<< DimGrid_e5, DimBlock_e5, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 5 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e6(NTrayectorias, 1);
+	const dim3 DimBlock_e6(BLOCK_SIZE, 1);
+	kernel_resolver_resto<<< DimGrid_e6, DimBlock_e6, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 6 error", cudaGetErrorString(err));
 
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyDeviceToHost);
 
@@ -142,11 +200,12 @@ __device__ void resolver_etapa_cnt_igcount(TSimplexGPUs &simplex,  TSimplexVars 
 	
 	if (threadIdx.x == 0)  {
 		cnt_igualdades = 0;
+		d_svars.res = 1;
 	}
 	
 	__syncthreads();
 	
-	for (int i = threadIdx.x; i <= simplex.NRestricciones; i += BLOCK_SIZE) {
+	for (int i = threadIdx.x; i <= simplex.NRestricciones; i += blockDim.x) {
 		if (simplex.flg_y[i] == 2) {
 			atomicAdd(&cnt_igualdades, 1);
 		}
@@ -164,7 +223,7 @@ __device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars
 	// simplex.cnt_varfijas = 0; // Esto viene al cargarse la estructura
 	// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
 	// Retorna la cantidad de cajas fijadas.
-	for (int i = threadIdx.x; i < simplex.NVariables; i += BLOCK_SIZE) {
+	for (int i = threadIdx.x; i < simplex.NVariables; i += blockDim.x) {
 		if (abs(simplex.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
 			if (abs(simplex.x_sup[i] - simplex.x_inf[i] ) < CasiCero_CajaLaminar) {
 				if (simplex.flg_x[i] < 0) {
@@ -178,52 +237,48 @@ __device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars
 	}
 }
 
-__device__ void resolver_gpu_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+__device__ void resolver_fijar_variables(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+
+	// Fijamos las variables que se hayan declarado como constantes.
+	if (!fijarVariables(simplex, simplex.cnt_varfijas, d_svars.cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
+		printf("%s\n", "PROBLEMA INFACTIBLE - No fijar las variable Fijas.");
+		d_svars.res = -32;
+	}
+	
+}
+
+__device__ void resolver_enfilar_variables_libres(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+	
+	if (d_svars.res != 1) return;
+	
+	if (!enfilarVariablesLibres(simplex, d_svars.cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, d_svars.cnt_variablesLiberadas)) {
+		printf("%s\n", "No fue posible conmutar a filas todas las variables libres");
+		d_svars.res = -33;
+	}
+	
+}
+
+__device__ void resolver_igualdades(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+	
+	if (d_svars.res != 1) return;
+	
+	if (resolverIgualdades(simplex, d_svars.cnt_columnasFijadas, simplex.cnt_varfijas, simplex.cnt_RestriccionesRedundantes, d_svars.cnt_igualdades) != 1) {
+		printf("%s\n", "No fue posible conmutar a filas todas las variables libres");
+		d_svars.res = -33;
+	}
+	
+}
+
+__device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
 	__shared__ int res;
 	__shared__ int cnt_columnasFijadas; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	__shared__ int cnt_RestrInfactibles;
-	__shared__ int cnt_variablesLiberadas;
-	__shared__ int cnt_igualdades;
+	
+	if (d_svars.res != 1) return;
 	
 	if (threadIdx.x == 0)  {
 		cnt_columnasFijadas = d_svars.cnt_columnasFijadas;
 		cnt_RestrInfactibles = d_svars.cnt_RestrInfactibles;
-		cnt_variablesLiberadas = d_svars.cnt_variablesLiberadas;
-		cnt_igualdades = d_svars.cnt_igualdades;
-	}
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		// Fijamos las variables que se hayan declarado como constantes.
-		if (!fijarVariables(simplex, simplex.cnt_varfijas, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
-			//mensajeDeError = "PROBLEMA INFACTIBLE - No fijar las variable Fijas.";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "PROBLEMA INFACTIBLE - No fijar las variable Fijas.");
-			res = -32;
-			return;
-		}
-	}
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		if (!enfilarVariablesLibres(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, cnt_variablesLiberadas)) {
-			//mensajeDeError = "No fue posible conmutar a filas todas las variables libres";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "No fue posible conmutar a filas todas las variables libres");
-			res = -33;
-			return;
-		}
-	}
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		if (resolverIgualdades(simplex, cnt_columnasFijadas, simplex.cnt_varfijas, simplex.cnt_RestriccionesRedundantes, cnt_igualdades) != 1) {
-			//mensajeDeError = "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.");
-			res = -31;
-			return;
-		}
 	}
 	
 	lbl_inicio:
