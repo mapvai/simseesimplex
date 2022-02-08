@@ -10,7 +10,6 @@ const double CasiCero_CajaLaminar = 1.0E-30;
 const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Double, CONFIRMAR SI ESTO ES CORRECTO (double 64 bits, 11 exponente y 53 mantisa, 53 log10(2) ≈ 15.955 => 2E−53 ≈ 1.11 × 10E−16 => EPSILON  ≈ 1.0E-16)
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
-__device__ void resolver_gpu(TSimplexGPUs &simplex) ;
 __device__ void posicionarPrimeraLibre(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_fijadas, int &cnt_columnasFijadas, int &kPrimeraLibre) ; // Esta funcion es interna, no se necesita declarar aca?
 __device__ bool fijarVariables(TSimplexGPUs &smp, int cnt_varfijas, int &cnt_columnasFijadas, int cnt_RestriccionesRedundantes);
 __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol);
@@ -40,10 +39,6 @@ __device__ void resolver_enfilar_variables_libres(TSimplexGPUs &simplex, TSimple
 __device__ void resolver_igualdades(TSimplexGPUs &simplex, TSimplexVars &d_svars);
 __device__ void resolver_reordenar_por_factibilidad(TSimplexGPUs &simplex, TSimplexVars &d_svars);
 __device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
-
-__global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array) {
-	resolver_gpu(simplex_array[blockIdx.x]);
-} 
 
 __global__ void kernel_resolver_etapa_cnt_igcount(TDAOfSimplexGPUs simplex_array,  TSimplexVars * d_svars) {
 	resolver_etapa_cnt_igcount(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
@@ -114,10 +109,6 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	
 	cudaMalloc(&d_svars, NTrayectorias*sizeof(TSimplexVars));
 	cudaMemset(d_svars, 0, NTrayectorias*sizeof(TSimplexVars));
-
-	// Ejecuto el kernel
-	// kernel_resolver<<< DimGrida, DimBlocka, 0, 0 >>>(d_simplex_array);
-	// cudaDeviceSynchronize();
 	
 	cudaError_t err;
 	
@@ -355,153 +346,6 @@ __device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_s
 			reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
 			res = 1;
 		}
-		goto lbl_inicio;
-	}
-
-	// printf("%s: %d\n", "Finish, result = ", res);
-
-}
-
-__device__ void resolver_gpu(TSimplexGPUs &simplex) { //,  TSimplexVars &vars) {
-	__shared__ int res;
-	__shared__ int cnt_columnasFijadas; // Cantidad de columnas FIJADAS x o y fija encolumnada
-	// int cnt_varfijas = 0; // Cantidad de variables fijadas, esta variable esta en la estructura Simplex
-	// simplex.cnt_varfijas = 0; // Esto viene al cargarse la estructura
-	__shared__ int cnt_RestrInfactibles;
-	__shared__ int cnt_variablesLiberadas;
-	// string mensajeDeError;
-	// MAP: Agrego este codigo para calcular las restricciones de igualdad
-	__shared__ int cnt_igualdades;
-	
-	if (threadIdx.x == 0)  {
-		cnt_columnasFijadas = 0;
-		cnt_RestrInfactibles = 0;
-		cnt_variablesLiberadas = 0;
-		cnt_igualdades = 0;
-	}
-	
-	__syncthreads();
-	
-	// Paralelizacion 1
-	for (int i = threadIdx.x; i <= simplex.NRestricciones; i += BLOCK_SIZE) {
-		if (simplex.flg_y[i] == 2) {
-			atomicAdd(&cnt_igualdades, 1);
-		}
-	}
-	
-	// fijarCajasLaminares()
-	// Si abs( cotasup - cotainf ) < AsumaCeroCaja then flg_x := 2
-	// Retorna la cantidad de cajas fijadas.
-	for (int i = threadIdx.x; i < simplex.NVariables; i += BLOCK_SIZE) {
-		if (abs(simplex.flg_x[i] ) < 2) { // No se aplica ni para 2 ni para 3
-			if (abs(simplex.x_sup[i] - simplex.x_inf[i] ) < CasiCero_CajaLaminar) {
-				if (simplex.flg_x[i] < 0) {
-					simplex.flg_x[i] = -2;
-				} else {
-					simplex.flg_x[i] = 2;
-				}
-				atomicAdd(&simplex.cnt_varfijas, 1);
-			}
-		}
-	}
-	
-	__syncthreads();
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		// Fijamos las variables que se hayan declarado como constantes.
-		if (!fijarVariables(simplex, simplex.cnt_varfijas, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes)) {
-			//mensajeDeError = "PROBLEMA INFACTIBLE - No fijar las variable Fijas.";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "PROBLEMA INFACTIBLE - No fijar las variable Fijas.");
-			res = -32;
-			return;
-		}
-	}
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		if (!enfilarVariablesLibres(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, cnt_variablesLiberadas)) {
-			//mensajeDeError = "No fue posible conmutar a filas todas las variables libres";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "No fue posible conmutar a filas todas las variables libres");
-			res = -33;
-			return;
-		}
-	}
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-		if (resolverIgualdades(simplex, cnt_columnasFijadas, simplex.cnt_varfijas, simplex.cnt_RestriccionesRedundantes, cnt_igualdades) != 1) {
-			//mensajeDeError = "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "PROBLEMA INFACTIBLE - No logré resolver las restricciones de igualdad.");
-			res = -31;
-			return;
-		}
-	}
-	
-	lbl_inicio:
-
-	__syncthreads();
-	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-
-		reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
-		
-		res = 1;
-		
-	}
-	__syncthreads();
-	
-	if (threadIdx.x == 0)  {
-		
-		while (cnt_RestrInfactibles > 0) {
-			res = pasoBuscarFactible(simplex, cnt_RestrInfactibles, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes);
-
-			switch (res) {
-				case 0: 
-					if (cnt_RestrInfactibles > 0) {
-						//mensajeDeError = "PROBLEMA INFACTIBLE - Buscando factibilidad";
-						//printf("%s\n", mensajeDeError.c_str());
-						printf("%s\n", "PROBLEMA INFACTIBLE - Buscando factibilidad");
-						res = -10;
-						return;
-					}
-					break;
-				case  -1:
-					//mensajeDeError = "NO encontramos pivote bueno - Buscando Factibilidad";
-					//printf("%s\n", mensajeDeError.c_str());
-					printf("%s\n", "NO encontramos pivote bueno - Buscando Factibilidad");
-					res = -11;
-					return;
-				case -2:
-					//mensajeDeError = "???cnt_infactibles= 0 - Buscando Factibilidad";
-					//printf("%s\n", mensajeDeError.c_str());
-					printf("%s\n", "???cnt_infactibles= 0 - Buscando Factibilidad");
-					res = -12;
-					return;
-			}
-		}
-	}
-	
-	__syncthreads();
-
-		
-	while (res == 1) {
-		darpaso(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, res);
-		__syncthreads();
-		if (res == -1) {
-			//mensajeDeError = "Error -- NO encontramos pivote bueno dando paso";
-			//printf("%s\n", mensajeDeError.c_str());
-			printf("%s\n", "Error -- NO encontramos pivote bueno dando paso");
-			res = -21;
-			return;
-		}
-	}
-	  
-	if (res == 2) {
 		goto lbl_inicio;
 	}
 
