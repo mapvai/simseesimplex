@@ -38,7 +38,8 @@ __device__ void resolver_etapa_fijar_cajlam(TSimplexGPUs &simplex,  TSimplexVars
 __device__ void resolver_fijar_variables(TSimplexGPUs &simplex, TSimplexVars &d_svars);
 __device__ void resolver_enfilar_variables_libres(TSimplexGPUs &simplex, TSimplexVars &d_svars);
 __device__ void resolver_igualdades(TSimplexGPUs &simplex, TSimplexVars &d_svars);
-__device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
+__device__ void resolver_reordenar_por_factibilidad(TSimplexGPUs &simplex, TSimplexVars &d_svars);
+__device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_svars) ;
 
 __global__ void kernel_resolver(TDAOfSimplexGPUs simplex_array) {
 	resolver_gpu(simplex_array[blockIdx.x]);
@@ -64,8 +65,12 @@ __global__ void kernel_resolver_igualdades(TDAOfSimplexGPUs simplex_array, TSimp
 	resolver_igualdades(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
 }
 
-__global__ void kernel_resolver_resto(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_resto(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
+__global__ void kernel_resolver_reordenar_por_factibilidad(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_reordenar_por_factibilidad(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+}
+
+__global__ void kernel_resolver_paso_iterativo(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
+	resolver_paso_iterativo(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
 }
 
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
@@ -157,13 +162,21 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 5 error", cudaGetErrorString(err));
 	
-	const dim3 DimGrid_e6(NTrayectorias, 1);
-	const dim3 DimBlock_e6(BLOCK_SIZE, 1);
-	kernel_resolver_resto<<< DimGrid_e6, DimBlock_e6, 0, 0 >>>(d_simplex_array, d_svars);
+	const dim3 DimGrid_e6(1, 1);
+	const dim3 DimBlock_e6(NTrayectorias, 1);
+	kernel_resolver_reordenar_por_factibilidad<<< DimGrid_e6, DimBlock_e6, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
 	
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 6 error", cudaGetErrorString(err));
+	
+	const dim3 DimGrid_e7(NTrayectorias, 1);
+	const dim3 DimBlock_e7(BLOCK_SIZE, 1);
+	kernel_resolver_paso_iterativo<<< DimGrid_e7, DimBlock_e7, 0, 0 >>>(d_simplex_array, d_svars);
+	cudaDeviceSynchronize();
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 7 error", cudaGetErrorString(err));
 
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TSimplexGPUs), cudaMemcpyDeviceToHost);
 
@@ -269,7 +282,13 @@ __device__ void resolver_igualdades(TSimplexGPUs &simplex, TSimplexVars &d_svars
 	
 }
 
-__device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+__device__ void resolver_reordenar_por_factibilidad(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
+	
+	reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, d_svars.cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
+	
+}
+
+__device__ void resolver_paso_iterativo(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
 	__shared__ int res;
 	__shared__ int cnt_columnasFijadas; // Cantidad de columnas FIJADAS x o y fija encolumnada
 	__shared__ int cnt_RestrInfactibles;
@@ -282,17 +301,7 @@ __device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
 	}
 	
 	lbl_inicio:
-
-	__syncthreads();
 	
-	//  Trabaja solo el primer hilo
-	if (threadIdx.x == 0)  {
-
-		reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
-		
-		res = 1;
-		
-	}
 	__syncthreads();
 	
 	if (threadIdx.x == 0)  {
@@ -328,7 +337,6 @@ __device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
 	
 	__syncthreads();
 
-		
 	while (res == 1) {
 		darpaso(simplex, cnt_columnasFijadas, simplex.cnt_RestriccionesRedundantes, res);
 		__syncthreads();
@@ -342,6 +350,11 @@ __device__ void resolver_resto(TSimplexGPUs &simplex, TSimplexVars &d_svars) {
 	}
 	  
 	if (res == 2) {
+		//  Trabaja solo el primer hilo
+		if (threadIdx.x == 0)  {
+			reordenarPorFactibilidad(simplex, simplex.cnt_RestriccionesRedundantes, cnt_RestrInfactibles); // MAP: cnt_RestrInfactibles es modificada dentro del proc
+			res = 1;
+		}
 		goto lbl_inicio;
 	}
 
