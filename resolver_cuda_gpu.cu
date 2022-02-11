@@ -2,7 +2,8 @@
 #include <math.h>
 #include "tsimplexgpus.h"
 
-#define BLOCK_SIZE 32 //  = WARP SIZE
+#define BLOCK_SIZE_P_I 32 //  = WARP SIZE
+#define BLOCK_SIZE_GR 128 //  = WARP SIZE
 
 const double CasiCero_Simplex = 1.0E-7;
 const double CasiCero_Simplex_CotaSup = CasiCero_Simplex * 1.0E+3;
@@ -48,20 +49,24 @@ __global__ void kernel_resolver_etapa_fijar_cajlam(TDAOfSimplexGPUs simplex_arra
 	resolver_etapa_fijar_cajlam(simplex_array[blockIdx.x], d_svars[blockIdx.x]);
 }
 
-__global__ void kernel_resolver_fijar_variables(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_fijar_variables(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+__global__ void kernel_resolver_fijar_variables(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars, int NTrayectorias) {
+	int index = blockIdx.x*blockDim.x + threadIdx.x;
+	if (index < NTrayectorias) resolver_fijar_variables(simplex_array[index], d_svars[index]);
 }
 
-__global__ void kernel_resolver_enfilar_variables_libres(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_enfilar_variables_libres(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+__global__ void kernel_resolver_enfilar_variables_libres(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars, int NTrayectorias) {
+	int index = blockIdx.x*blockDim.x + threadIdx.x;
+	if (index < NTrayectorias) resolver_enfilar_variables_libres(simplex_array[index], d_svars[index]);
 }
 
-__global__ void kernel_resolver_igualdades(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_igualdades(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+__global__ void kernel_resolver_igualdades(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars, int NTrayectorias) {
+	int index = blockIdx.x*blockDim.x + threadIdx.x;
+	if (index < NTrayectorias) resolver_igualdades(simplex_array[index], d_svars[index]);
 }
 
-__global__ void kernel_resolver_reordenar_por_factibilidad(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
-	resolver_reordenar_por_factibilidad(simplex_array[threadIdx.x], d_svars[threadIdx.x]);
+__global__ void kernel_resolver_reordenar_por_factibilidad(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars, int NTrayectorias) {
+	int index = blockIdx.x*blockDim.x + threadIdx.x;
+	if (index < NTrayectorias) resolver_reordenar_por_factibilidad(simplex_array[index], d_svars[index]);
 }
 
 __global__ void kernel_resolver_paso_iterativo(TDAOfSimplexGPUs simplex_array, TSimplexVars * d_svars) {
@@ -129,40 +134,51 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 2 error", cudaGetErrorString(err));
 	
-	const dim3 DimGrid_e3(1, 1);
-	const dim3 DimBlock_e3(NTrayectorias, 1);
-	kernel_resolver_fijar_variables<<< DimGrid_e3, DimBlock_e3, 0, 0 >>>(d_simplex_array, d_svars);
+	
+	int cantBloques = ceil((float)NTrayectorias / (float)BLOCK_SIZE_GR);
+	printf("%s: %d\n", "cantBloques fijar_variables: ", cantBloques);
+	const dim3 DimGrid_e3(cantBloques, 1);
+	const dim3 DimBlock_e3(BLOCK_SIZE_GR, 1);
+	kernel_resolver_fijar_variables<<< DimGrid_e3, DimBlock_e3, 0, 0 >>>(d_simplex_array, d_svars, NTrayectorias);
 	cudaDeviceSynchronize();
 	
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 3 error", cudaGetErrorString(err));
 	
-	const dim3 DimGrid_e4(1, 1);
-	const dim3 DimBlock_e4(NTrayectorias, 1);
-	kernel_resolver_enfilar_variables_libres<<< DimGrid_e4, DimBlock_e4, 0, 0 >>>(d_simplex_array, d_svars);
+	
+	cantBloques = ceil((float)NTrayectorias / (float)BLOCK_SIZE_GR);
+	printf("%s: %d\n", "cantBloques enfilar_variables_libres: ", cantBloques);
+	const dim3 DimGrid_e4(cantBloques, 1);
+	const dim3 DimBlock_e4(BLOCK_SIZE_GR, 1);
+	kernel_resolver_enfilar_variables_libres<<< DimGrid_e4, DimBlock_e4, 0, 0 >>>(d_simplex_array, d_svars, NTrayectorias);
 	cudaDeviceSynchronize();
 	
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 4 error", cudaGetErrorString(err));
 	
-	const dim3 DimGrid_e5(1, 1);
-	const dim3 DimBlock_e5(NTrayectorias, 1);
-	kernel_resolver_igualdades<<< DimGrid_e5, DimBlock_e5, 0, 0 >>>(d_simplex_array, d_svars);
+	cantBloques = ceil((float)NTrayectorias / (float)BLOCK_SIZE_GR);
+	printf("%s: %d\n", "cantBloques resolver_igualdades: ", cantBloques);
+	const dim3 DimGrid_e5(cantBloques, 1);
+	const dim3 DimBlock_e5(BLOCK_SIZE_GR, 1);
+	kernel_resolver_igualdades<<< DimGrid_e5, DimBlock_e5, 0, 0 >>>(d_simplex_array, d_svars, NTrayectorias);
 	cudaDeviceSynchronize();
 	
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 5 error", cudaGetErrorString(err));
 	
-	const dim3 DimGrid_e6(1, 1);
-	const dim3 DimBlock_e6(NTrayectorias, 1);
-	kernel_resolver_reordenar_por_factibilidad<<< DimGrid_e6, DimBlock_e6, 0, 0 >>>(d_simplex_array, d_svars);
+	
+	cantBloques = ceil((float)NTrayectorias / (float)BLOCK_SIZE_GR);
+	printf("%s: %d\n", "cantBloques reordenar_por_factibilidad: ", cantBloques);
+	const dim3 DimGrid_e6(cantBloques, 1);
+	const dim3 DimBlock_e6(BLOCK_SIZE_GR, 1);
+	kernel_resolver_reordenar_por_factibilidad<<< DimGrid_e6, DimBlock_e6, 0, 0 >>>(d_simplex_array, d_svars, NTrayectorias);
 	cudaDeviceSynchronize();
 	
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 6 error", cudaGetErrorString(err));
 	
 	const dim3 DimGrid_e7(NTrayectorias, 1);
-	const dim3 DimBlock_e7(BLOCK_SIZE, 1);
+	const dim3 DimBlock_e7(BLOCK_SIZE_P_I, 1);
 	kernel_resolver_paso_iterativo<<< DimGrid_e7, DimBlock_e7, 0, 0 >>>(d_simplex_array, d_svars);
 	cudaDeviceSynchronize();
 	
@@ -528,7 +544,7 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	// MAP: POSIBLE MEJORA, en GPU se encargaran hilos diferentes, recorrida por filas
 	// MAP: En el codigo original se separa en 4 casos el mismo codigo, se recorre desde 1 to cnt_RestriccionesRedundantes to kfil - 1  <skipping kfil (fila pivot)> to nf - 1 to nf
 	// MAP: Se concatenan estos casos en un mismo for
-	for (k = threadIdx.x; k < kfil; k+= BLOCK_SIZE) {
+	for (k = threadIdx.x; k < kfil; k+= blockDim.x) {
 		m = -smp.mat[k * (smp.NVariables + 1) + jcol] * invPiv;
 		if (abs(m) > 0) {
 			for (j = 0; j < jcol; j++) {
@@ -547,7 +563,7 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	
 	// Salteo la fila kfil
 	
-	for (k = kfil + 1 + threadIdx.x; k <= smp.NRestricciones; k += BLOCK_SIZE) { // MAP: <= pq considera la fila de la funcion z
+	for (k = kfil + 1 + threadIdx.x; k <= smp.NRestricciones; k += blockDim.x) { // MAP: <= pq considera la fila de la funcion z
 		m = -smp.mat[k * (smp.NVariables + 1) + jcol] * invPiv;
 		if (abs(m) > 0) {
 			for (j = 0; j < jcol; j++) {
@@ -566,13 +582,13 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 
 	// Completo la fila kfil
 	m = -invPiv;
-	for (j = threadIdx.x; j < jcol; j += BLOCK_SIZE) {
+	for (j = threadIdx.x; j < jcol; j += blockDim.x) {
 		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
 	}
 
 	if (threadIdx.x == 0) smp.mat[kfil * (smp.NVariables + 1) + jcol] = -m;
 	
-	for (j = jcol + 1 + threadIdx.x; j <= smp.NVariables; j += BLOCK_SIZE) { // MAP: Antes jcol + 1 to nc
+	for (j = jcol + 1 + threadIdx.x; j <= smp.NVariables; j += blockDim.x) { // MAP: Antes jcol + 1 to nc
 		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
 	}
 	
