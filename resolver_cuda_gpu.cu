@@ -2,8 +2,8 @@
 #include <math.h>
 #include "tsimplexgpus.h"
 
-#define BLOCK_SIZE_P_I 32 //  = WARP SIZE
-#define BLOCK_SIZE_GR 128 //  = WARP SIZE
+#define BLOCK_SIZE_P_I 64 //  = 2 * WARP SIZE
+#define BLOCK_SIZE_GR 160 //  = 5 * WARP SIZE
 
 const double CasiCero_Simplex = 1.0E-7;
 const double CasiCero_Simplex_CotaSup = CasiCero_Simplex * 1.0E+3;
