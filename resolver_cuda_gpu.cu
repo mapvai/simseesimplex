@@ -581,15 +581,14 @@ __device__ void intercambiar(TSimplexGPUs &smp, int kfil, int jcol) {
 	}
 
 	// Completo la fila kfil
-	m = -invPiv;
 	for (j = threadIdx.x; j < jcol; j += blockDim.x) {
-		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
+		smp.mat[kfil * (smp.NVariables + 1) + j] = -smp.mat[kfil * (smp.NVariables + 1) + j] * invPiv;
 	}
 
-	if (threadIdx.x == 0) smp.mat[kfil * (smp.NVariables + 1) + jcol] = -m;
+	if (threadIdx.x == 0) smp.mat[kfil * (smp.NVariables + 1) + jcol] = invPiv;
 	
 	for (j = jcol + 1 + threadIdx.x; j <= smp.NVariables; j += blockDim.x) { // MAP: Antes jcol + 1 to nc
-		smp.mat[kfil * (smp.NVariables + 1) + j] = smp.mat[kfil * (smp.NVariables + 1) + j] * m;
+		smp.mat[kfil * (smp.NVariables + 1) + j] = -smp.mat[kfil * (smp.NVariables + 1) + j] * invPiv;
 	}
 	
 	if (threadIdx.x == 0) {
