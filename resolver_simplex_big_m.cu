@@ -160,9 +160,9 @@ void resolver_ejemplo3() {
 
 		0 ≤ x1 ≤ 12,  -6 ≤ x2 ≤ 6, -5 ≤ x3 ≤ 5
 		
-		Sol: x1 = 0, x2 = -5.3, x3 = -2.9 Verificado
+		Sol SIMSEE: x1 = 0, x2 = -5.3, x3 = -2.9 Verificado, z min = -21.7
 		
-=> cambio variable para las cotas inferiores
+=> cambio variable para las cotas inferiores xc = x + cota inf => x = xc - cota inf => Sol xc: x1 = 0, x2 = 0.7, x3 = 2.1
 	Max -x1 - 3x2 - 2x3
 		st:
 		x1 + x2 + x3 	≥ -10.5 + 6 + 5 = 0.5
@@ -196,9 +196,9 @@ void resolver_ejemplo3() {
 				x2			+ s4 		 = 12
 						x3	+ s5 		 = 10
 	
-	x1..s6 ≥ 0
+	x1..s5 ≥ 0
 	
-	RES: x1 = 0.7 xc3 = 2.8 => x3 = 2.8 - 5 = -2.2
+	RESULTADO OUR SIMPLEX: x1 = 0.7, xc2 = 0 => x2 = 0 - 6 = -6, xc3 = 2.8 => x3 = 2.8 - 5 = -2.2 Verificado, da tambien z min = -21.7
 */	
 	
 	TSimplexGPUs simplex; // (TSimplexGPUs*)malloc(sizeof(TSimplexGPUs));
@@ -299,19 +299,23 @@ int locate_min_ratio(TSimplexGPUs &smp, int zpos) {
 
 	mejory = -1;
 	min_apy = MaxNReal;
+	printf("qy:\t");
 	for (y = 3; y < smp.Nfilas; y++) {
 		denom = smp.tabloide[y*smp.NColumnas + zpos];
-		// printf("Cociente: %f\n",  denom);
+		printf("%.1f / %.1f ",  smp.tabloide[y*smp.NColumnas + 2], denom);
+		// printf("Denominador: %f\n",  denom);
 		if (denom > CasiCero_Simplex) {
 			qy = smp.tabloide[y*smp.NColumnas + 2] / denom;
+			printf(" (%.1f)\t",  qy);
 			if (qy > 0 && qy < min_apy) {
 				mejory = y;
 				min_apy = qy;
-				printf("MIn Q: %f\n",  min_apy);
 			}
+		} else {
+			printf(" (NA)\t");
 		}
 	}
-	printf("en locate qpos \n");
+	printf("Min Q: %f\n",  min_apy);
 	return mejory;
 	
 }
