@@ -15,17 +15,16 @@ const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 const double M = 100; //100; //sqrt(MaxNReal);
 
 void resolver_cpu(TSimplexGPUs &simplex) ;
-
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
-void moverseASolFactible(TabloideGPUs &tabloide);
-void agregarRestriccionesCotaSup(TabloideGPUs &tabloide);
-void agregarVariablesHolguraArtificiales(TabloideGPUs &tabloide);
-
+void moverseASolFactible(TSimplexGPUs &smp);
+void agregarRestriccionesCotaSup(TSimplexGPUs &smp);
+void agregarVariablesHolguraArtificiales(TSimplexGPUs &smp);
 void resolver_simplex_big_m(TSimplexGPUs &simplex) ;
 bool intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol);
 int locate_min_dj(TSimplexGPUs &smp);
 int locate_min_ratio(TSimplexGPUs &smp, int zpos);
 void resolver_ejemplo1();
+void resolver_ejemplo2trasnform();
 void printStatus(TSimplexGPUs &smp);
 void printResult(TSimplexGPUs &smp);
 int findVarIndex(TSimplexGPUs &smp, int indx);
@@ -36,7 +35,7 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 		resolver_cpu(simplex_array[kTrayectoria]);
 	}
 	*/
-	resolver_ejemplo1();
+	resolver_ejemplo2trasnform();
 	
 }
 
@@ -114,9 +113,92 @@ void resolver_ejemplo1() {
 	resolver_cpu(simplex);
 }
 
+void resolver_ejemplo2trasnform() {
+	
+/*
+	Problema Propuesto por SimSEE
+		Min x1 + 3x2 + 2x3
+		st:
+		x1 + x2 + x3 	≥ -10.5
+		x1 + x2 			= - 5.3
+		x1  		- x3 		≤ 2.9
+
+		0 ≤ x1 ≤ 12,  -6 ≤ x2 ≤ 6, -5 ≤ x3 ≤ 5
+		
+		Sol SIMSEE: x1 = 0, x2 = -5.3, x3 = -2.9 Verificado, z min = -21.7
+		
+=> cambio variable para las cotas inferiores xc = x + cota inf => x = xc - cota inf => Sol xc: x1 = 0, x2 = 0.7, x3 = 2.1
+	Max -x1 - 3x2 - 2x3
+		st:
+		x1 + x2 + x3 	≥ -10.5 + 6 + 5 = 0.5
+		x1 + x2 			= - 5.3 + 6 		 = 0.7
+		x1  		  - x3 	≤ 2.9 - 5 			 = -2.1
+		x1					≤ 12
+				x2			≤ 6 + 6 			 = 12
+						x3	≤ 5 + 5				 = 10
+						
+		x1, x2, x3 > 0
+*/	
+	
+    //simplex->tabloide = (double*)malloc((simplex->NVariables + 1)*(simplex->NRestricciones + 1)*sizeof(double));
+	double tabl[] = {
+		3, 3, 15, 0, -1, -3, -2, 0, 0, 0, 0, 0, 0, 0, 0, 
+		11, 6, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 12, 12, 10, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, -6, -5, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0.5, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 2, 0, 0.7, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 2.1, -1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	};
+	
+	TabloideGPUs tabloide = (double*)&tabl;
+	TSimplexGPUs simplex = desestructurarTabloide(tabloide);
+	
+	/*
+	=>	Move to a factible solution (Xb > 0)
+		Max -x1 - 3x2 - 2x3
+		st:
+		x1 + x2 + x3 	≥ 0.5
+		x1 + x2 			= 0.7
+	   -x1  		 + x3 	≥ 2.1
+		x1					≤ 12
+				x2			≤ 12
+						x3	≤ 10
+						
+		x1, x2, x3 > 0
+	
+=> Agregamos las variables de holgura y demasia 
+		Max -x1 - 3x2 - 2x3
+		st:
+		x1 + x2 + x3 	 - s1 + a1  = 0.5
+		x1 + x2 			+ a2          = 0.7
+	 - x1  		 + x3 	 - s2 + a3 = 2.1
+		x1					+ s3 		 = 12
+				x2			+ s4 		 = 12
+						x3	+ s5 		 = 10
+	
+	x1..s5 ≥ 0
+	
+	RESULTADO OUR SIMPLEX: x1 = 0.7, xc2 = 0 => x2 = 0 - 6 = -6, xc3 = 2.8 => x3 = 2.8 - 5 = -2.2 Verificado, da tambien z min = -21.7
+	*/
+	
+	moverseASolFactible(simplex);
+	
+	agregarRestriccionesCotaSup(simplex);
+	
+	agregarVariablesHolguraArtificiales(simplex);
+	
+	resolver_cpu(simplex);
+
+}
+
 void resolver_cpu(TSimplexGPUs &simplex) {
 	resolver_simplex_big_m(simplex);
-	
 }
 
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide) {
@@ -165,21 +247,22 @@ void moverseASolFactible(TSimplexGPUs &smp) {
 }
 
 void agregarRestriccionesCotaSup(TSimplexGPUs &smp) {
-	int ncota = 0;
+	int qrest = smp.rest_ini;
 	for (int i = 0; i < smp.var_x; i++) {
-		ncota ++;
 		if (smp.flg_x[i] == 1) {
 			smp.flg_y[(smp.rest_ini + i)*smp.mat_adv_row] = 1;
 			smp.Xb[(smp.rest_ini + i)*smp.mat_adv_row] = smp.sup[i];
-			for (int j = 0; j < smp.var_x; j++) smp.matriz[ncota*smp.mat_adv_row + j] = (ncota == j)? 1 : 0;
+			for (int j = 0; j < smp.var_x; j++) smp.matriz[qrest*smp.mat_adv_row + j] = (qrest == (j + smp.rest_ini))? 1 : 0;
+			qrest ++;
 		}
 	}
-	if (smp.rest_fin == (smp.rest_ini + ncota)) printf("DISCREPANCIA EN LA CANTIDAD DE RESTRICCIONES FINAL\n");
+	printf("%i / %i \n", smp.rest_fin, smp.rest_ini + qrest);
+	if (smp.rest_fin != qrest) printf("DISCREPANCIA EN LA CANTIDAD DE RESTRICCIONES FINAL\n");
 }
 
 void agregarVariablesHolguraArtificiales(TSimplexGPUs &smp) {
-	int var_s, var_a, var_all;
-	var_s = 0; var_a = 0; var_all = smp.var_x;
+	int var_s, var_a, var_count;
+	var_s = 0; var_a = 0; var_count = smp.var_x;
 	for (int i = 0; i < smp.var_x; i++) {
 		smp.var_type[i] = 0;
 		smp.top[i] = i + 1;
@@ -187,59 +270,59 @@ void agregarVariablesHolguraArtificiales(TSimplexGPUs &smp) {
 	
 	// Completo con 0s la matriz
 	for (int i = 0; i < smp.rest_fin; i++) {
-		for (int j = 0; j < smp.var_all; j++) {
+		for (int j = var_count; j < smp.var_all; j++) {
 			smp.matriz[i*smp.mat_adv_row + j] = 0;
 		}
 	}
 	
 	for (int i = 0; i < smp.rest_fin; i++) {
 		if (smp.flg_y[i*smp.mat_adv_row] == 0) { // rest >=
-			smp.matriz[i*smp.mat_adv_row + var_all] = -1;
-			smp.matriz[i*smp.mat_adv_row + var_all +1] = 1;
+			smp.matriz[i*smp.mat_adv_row + var_count] = -1;
+			smp.matriz[i*smp.mat_adv_row + var_count +1] = 1;
 			
-			smp.var_type[var_all] = 1;
-			smp.var_type[var_all +1] = 2;
+			smp.var_type[var_count] = 1;
+			smp.var_type[var_count +1] = 2;
 			
-			smp.z[var_all] = 0;
-			smp.z[var_all +1] = -M;
+			smp.z[var_count] = 0;
+			smp.z[var_count +1] = -M;
 			
-			smp.top[var_all] = var_all + 1;
-			smp.top[var_all + 1] = var_all + 2;
-			smp.left[i*smp.mat_adv_row + var_all] = var_all + 2;
+			smp.top[var_count] = var_count + 1;
+			smp.top[var_count + 1] = var_count + 2;
+			smp.left[i*smp.mat_adv_row] = var_count + 2;
 			
 			smp.Cb[i*smp.mat_adv_row] = -M;
 			
-			var_s++; var_a++; var_all += 2;
+			var_s++; var_a++; var_count += 2;
 		} else if (smp.flg_y[i*smp.mat_adv_row] == 1) { // rest <=
-			smp.matriz[i*smp.mat_adv_row + var_all] = 1;
+			smp.matriz[i*smp.mat_adv_row + var_count] = 1;
 			
-			smp.var_type[var_all] = 1;
+			smp.var_type[var_count] = 1;
 			
-			smp.z[var_all] = 0;
+			smp.z[var_count] = 0;
 			
-			smp.top[var_all] = var_all + 1;
-			smp.left[i*smp.mat_adv_row + var_all] = var_all + 1;
+			smp.top[var_count] = var_count + 1;
+			smp.left[i*smp.mat_adv_row] = var_count + 1;
 			
 			smp.Cb[i*smp.mat_adv_row] = 0;
 			
-			var_a++; var_all ++;
+			var_a++; var_count ++;
 		} else { // 2: rest =
-			smp.matriz[i*smp.mat_adv_row + var_all] = 1;
+			smp.matriz[i*smp.mat_adv_row + var_count] = 1;
 			
-			smp.var_type[var_all] = 2;
+			smp.var_type[var_count] = 2;
 			
-			smp.z[var_all] = 0;
+			smp.z[var_count] = -M;
 			
-			smp.top[var_all] = var_all + 1;
-			smp.left[i*smp.mat_adv_row + var_all] = var_all + 1;
+			smp.top[var_count] = var_count + 1;
+			smp.left[i*smp.mat_adv_row] = var_count + 1;
 			
 			smp.Cb[i*smp.mat_adv_row] = -M;
 			
-			var_s++; var_all ++;
+			var_s++; var_count ++;
 		}
 	}
 	
-	if (smp.var_all == var_all) printf("DISCREPANCIA EN LA CANTIDAD DE VARIABLES FINAL\n");
+	if (smp.var_all != var_count) printf("DISCREPANCIA EN LA CANTIDAD DE VARIABLES FINAL\n");
 	
 }
 
@@ -342,9 +425,8 @@ bool intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	invPiv = 1 / smp.matriz[kfil * smp.mat_adv_row + jcol];
 	
 	ipos = kfil * smp.mat_adv_row;
-	
 	smp.Xb[kfil*smp.mat_adv_row] *= invPiv; // Modifico Xb
-	for (j = 0; j < smp.var_all; j++) {
+	for (j = 0; j < smp.var_all; j++) { // Modifico la k fila
 		smp.matriz[ipos + j] *= invPiv;
 	}
 	smp.matriz[kfil * smp.mat_adv_row + jcol] = 1;
@@ -421,7 +503,7 @@ int findVarIndex(TSimplexGPUs &smp, int indx) {
 	int vind = 1;
 	int varType = smp.var_type[indx];
 	if ( varType == 0) {
-		return indx - 2;
+		return indx  + 1;
 	} else {
 		for (int i = 0; i < indx; i++) {
 			if (smp.var_type[i] == varType) vind++;
