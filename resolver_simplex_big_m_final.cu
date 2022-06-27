@@ -14,7 +14,7 @@ const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 const double M = 100; //100; //sqrt(MaxNReal);
 
-void resolver_cpu(TSimplexGPUs &simplex) ;
+void resolver_cpu(TabloideGPUs &simplex) ;
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
 void moverseASolFactible(TSimplexGPUs &smp);
 void agregarRestriccionesCotaSup(TSimplexGPUs &smp);
@@ -31,12 +31,12 @@ double findVarXbValue(TSimplexGPUs &smp, int indx);
 int findVarIndex(TSimplexGPUs &smp, int indx);
 
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
-	/*
+	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
 		resolver_cpu(simplex_array[kTrayectoria]);
 	}
-	*/
-	resolver_ejemplo2trasnform();
+	
+	// resolver_ejemplo2trasnform();
 	
 }
 
@@ -111,7 +111,7 @@ void resolver_ejemplo1() {
 	
 	TabloideGPUs tabloide = (double*)&tabl;
 	TSimplexGPUs simplex = desestructurarTabloide(tabloide);
-	resolver_cpu(simplex);
+	resolver_simplex_big_m(simplex);
 }
 
 void resolver_ejemplo2trasnform() {
@@ -194,11 +194,17 @@ void resolver_ejemplo2trasnform() {
 	
 	agregarVariablesHolguraArtificiales(simplex);
 	
-	resolver_cpu(simplex);
+	resolver_simplex_big_m(simplex);
 
 }
 
-void resolver_cpu(TSimplexGPUs &simplex) {
+void resolver_cpu(TabloideGPUs &tabloide) {
+	TSimplexGPUs simplex = desestructurarTabloide(tabloide);
+	
+	moverseASolFactible(simplex);
+	agregarRestriccionesCotaSup(simplex);
+	agregarVariablesHolguraArtificiales(simplex);
+	
 	resolver_simplex_big_m(simplex);
 }
 
