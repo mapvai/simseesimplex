@@ -27,6 +27,7 @@ void resolver_ejemplo1();
 void resolver_ejemplo2trasnform();
 void printStatus(TSimplexGPUs &smp);
 void printResult(TSimplexGPUs &smp);
+double findVarXbValue(TSimplexGPUs &smp, int indx);
 int findVarIndex(TSimplexGPUs &smp, int indx);
 
 extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
@@ -471,32 +472,46 @@ void printStatus(TSimplexGPUs &smp) {
 
 void printResult(TSimplexGPUs &smp) {
 	printf("%s\n", "Resultado");
-	int indx;
-	string nvar = "xos";
-	
-	/* // Print left vector
-	printf("left = [%f", smp.tabloide[3*smp.NColumnas]);
-	for(int i = 4; i < smp.Nfilas; i++) printf(", %f", smp.tabloide[i*smp.NColumnas]);
-	printf("]\n");
-	*/
-	
-	//printf("z = %f\n", smp.tabloide[smp.NVariables]);
+	double bi, val;
+	double min = 0;
 	int varType;
-	for(int i = 0; i < smp.rest_fin; i++) {
-		indx = smp.left[i*smp.mat_adv_row] - 1;
-		// indx = (indx < 0)? -indx: indx;
-		varType = smp.var_type[indx];
-		if (varType == 0) {
-				nvar = "x";
-		} else if (varType == 1) {
-			nvar = "s";
-		} else {
-			nvar = "a - error ";
+	
+	for(int i = 0; i < smp.var_x; i++) {
+		bi = findVarXbValue(smp, i);
+		val = bi + smp.inf[i];
+		if (val != 0) {
+			printf("x%i = %.2f  (Xbi = %.2f)\n", findVarIndex(smp, i),  val, bi);
+			min -= val * smp.z[i];
 		}
-		
-		printf("%s%i = %.2f \n", nvar.c_str(), findVarIndex(smp, indx),  smp.Xb[i*smp.mat_adv_row]);
 	}
 	
+	for(int i = smp.var_x; i < smp.var_all; i++) {
+		bi = findVarXbValue(smp, i);
+		if (bi != 0) {
+			varType = smp.var_type[i];
+			if (varType == 1) {
+				val = bi;
+				printf("s%i = %.2f \n", findVarIndex(smp, i), val);
+			} else {
+				val = bi;
+				printf("a - error%i = %.2f\n", findVarIndex(smp, i),  val);
+			}
+		}
+	}
+	
+	printf("Z min = %.2f \n", min);
+	
+}
+
+double findVarXbValue(TSimplexGPUs &smp, int indx) {
+	int lefti;
+	for(int i = 0; i < smp.rest_fin; i++) {
+		lefti = ((int) smp.left[i*smp.mat_adv_row]);
+		if (indx == (lefti - 1)) {
+			return smp.Xb[i*smp.mat_adv_row];
+		}
+	}
+	return 0;
 }
 
 int findVarIndex(TSimplexGPUs &smp, int indx) {

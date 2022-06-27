@@ -9,7 +9,7 @@ struct TSimplexGPUs {
 	int rest_ini, rest_fin;
 	int mat_adv_row;
 	
-	double* tabloide;
+	double* tabloide; // Referencia al tabloide
 	
     double* top; // largo filas, horizontal
     double* left; // largo columnas, vertical
