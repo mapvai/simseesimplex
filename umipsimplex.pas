@@ -174,7 +174,7 @@ type
     // retorna TRUE si x_j es una variable entera
     function EsEntera( j: integer ): boolean; override;
     {$IFDEF SIMSEE_GPUS}
-    procedure toStruct(var struct : TSimplexGPUs);
+    procedure toStruct(var tabloide : TSimplexGPUs);
     procedure loadFromStruct(struct : TSimplexGPUsOLD);
     procedure loadFromOurStruct(struct : TSimplexGPUsOLD);
     {$ENDIF}
@@ -780,90 +780,87 @@ begin
 end;
 
 {$IFDEF SIMSEE_GPUS}
-procedure TMIPSimplex.toStruct(var struct : TSimplexGPUs);
+procedure TMIPSimplex.toStruct(var tabloide : TSimplexGPUs);
 var
-  //res:TSimplexGPUs;
-  kVariable, NVariables, kRestriccion, NRestricciones, kVariableEntera,i,j: Integer;
-  cantcotasup, cantColumnas, cantFilas, restriccionesNoFijas : Integer;
+  NVariables, NRestricciones, kVariableEntera, i, j: Integer;
+  cantcotasup, cantColumnas, cantFilas, cantVars, restriccionesNoFijas : Integer;
 begin
 
-   writeln( 'ENTRO TOSTRUCT tabloide!');
+  cantcotasup := 0;
 
-  //4 (datos de control) + Largo 3 (vars) + 3 (cotas sup) + 4 (restricciones <=) + 1 (restricciones =) = 15
-  //cantColumnas = 4 + NVariables + NRestricciones + cantcotasup
+  NVariables := nc - 1;
+  NRestricciones := nf - 1;
+  writeln( 'NVariables: ', NVariables);
+  writeln( 'NRestricciones: ', NRestricciones);
 
-  cantcotasup:=0;
-
-
-  NVariables:=nc - 1;
-  NRestricciones:=nf - 1;
-  writeln( 'NVariables: ',NVariables);
-  writeln( 'NRestricciones: ',NRestricciones);
-
-  for kVariable:=0 to NVariables-1 do
+  for j := 1 to NVariables do
   begin
-	if (self.x_sup.pv[kVariable+1]  > 0) then
-		cantcotasup := cantcotasup + 1;
+       if (flg_x[j] > 0) then
+          cantcotasup := cantcotasup + 1;
   end;
 
-  //restriccionesNoFijas := NRestricciones - cnt_varfijas;
-  //writeln(' restriccionesNoFijas :', restriccionesNoFijas);
+  cantVars :=  NVariables + NRestricciones;
+  for i := 1 to NRestricciones do
+  begin
+       if (flg_y[i] = 0) then
+       begin
+          if (self.e(i, nc) < 0) then
+          begin
+             cantVars := cantVars + 2;
+          end
+          else
+          begin
+             cantVars := cantVars + 1;
+          end;
+       end
+       else
+       begin
+           cantVars := cantVars + 1;
+       end;
+  end;
 
-  cantColumnas := 4 + NVariables + NRestricciones + cantcotasup;
-  cantFilas := 6 + NRestricciones + cantcotasup ;
+  cantColumnas := 4 + cantVars;
+  cantFilas := 6 + NRestricciones + cantcotasup;
+
+  SetLength(tabloide, cantFilas*cantColumnas);
 
   writeln('cantcotasup :', cantcotasup);
   writeln('cantColumnas :', cantColumnas);
   writeln('cantFilas :', cantFilas);
+  writeln('cantVars :', cantVars);
 
   //cargo matriz con ceros
-  for i:=0 to cantColumnas * cantFilas  do
-	struct[i] := 0;
-
-
+  for i:= 0 to cantColumnas * cantFilas  do
+	tabloide[i] := 0;
 
   //cargo los primeros 2 lugares de la matriz y funcion z a primera fila en la matriz
-  struct[0]:= NVariables;
-  struct[1]:= NRestricciones;
-  for kVariable:=0 to NVariables -1 do
+  tabloide[0]:= NVariables;
+  tabloide[1]:= NRestricciones;
+  tabloide[2]:= cantColumnas;
+  tabloide[cantColumnas]:= cantVars;
+  tabloide[cantColumnas + 1]:= NRestricciones + cantcotasup;
+
+  // Cargo z
+  for j:= 1 to NVariables do
+      tabloide[j + 3] := e(nf, j);
+
+  for j := 0 to NVariables -1 do
   begin
-	struct[ kVariable + 4]:=e(NRestricciones + 1, kVariable + 1);
+      tabloide[cantColumnas + j + 4] := flg_x[j + 1]; // Cargo en segunda fila flg_x
+      tabloide[2*cantColumnas + j + 4] := self.x_sup.pv[j + 1]; // Cargo en tercera fila x_sup
+      tabloide[3*cantColumnas + j + 4]:= self.x_inf.pv[j + 1];
   end;
 
-
-  //cargo segunda fila flg_x
-  for kVariable:=0 to NVariables -1 do
+  // Cargo Restricciones
+  for i := 0 to NRestricciones - 1  do
   begin
-	struct[(cantColumnas) + kVariable + 4]:= self.flg_x[kVariable+1];
+    tabloide[(i + 6)*cantColumnas + 1]:= flg_y[i + 1]; // Cargo columna flag_y
+    tabloide[(i + 6)*cantColumnas + 3]:= -e(i + 1 , nc); // Cargo Xb
+    for j:= 0 to NVariables -1 do
+        tabloide[(i + 6)*cantColumnas + j + 4] := e(i + 1 , j + 1);
   end;
 
-
-  //cargo tercera fila x_sup
-  for kVariable:=0 to NVariables-1 do
-  begin
-	struct[2*(cantColumnas) + kVariable +4]:= self.x_sup.pv[kVariable+1];
-  end;
-
-
-  //cargo cuarta fila x_inf
-  for kVariable:=0 to NVariables-1 do
-  begin
-	struct[3*(cantColumnas) + kVariable +4]:= self.x_inf.pv[kVariable+1];
-  end;
-
-
-  //cargo Restricciones
-  for kRestriccion:=0 to NRestricciones - 1  do
-  begin
-	struct[(kRestriccion+5)*(cantColumnas)+1 ]:= self.flg_y[kRestriccion+1]; //cargo columna flag_y
-	struct[(kRestriccion+5)*(cantColumnas)+3 ]:= e(kRestriccion + 1 , NVariables + 1);//cargo Xb
-    for kVariable:=0 to NVariables -1 do
-	begin
-		struct[(kRestriccion+5)*(cantColumnas) + kVariable + 4]:= e(kRestriccion + 1 , kVariable + 1);
-	end;
-  end;
-
-  //print
+  (* // Print
   for j:=0 to cantFilas -1 do
   begin
 	for i := 0 to cantColumnas -1 do
@@ -873,49 +870,8 @@ begin
     writeln(' ');
     writeln(' ');
   end;
-(*
-var
-  //res:TSimplexGPUs;
-  kVariable, NVariables, kRestriccion, NRestricciones, kVariableEntera: Integer;
-begin
-  struct.NEnteras:= length(lstvents);
-  struct.NVariables:= nc - 1;
-  struct.NRestricciones:= nf - 1;
-  struct.cnt_varfijas:=cnt_varfijas;
-  struct.cnt_RestriccionesRedundantes:=cnt_RestriccionesRedundantes;
+  *)
 
-  NVariables:=struct.NVariables;
-
-  struct.x_inf := @x_inf.pv[1];
-  struct.x_sup := @x_sup.pv[1];
-
-  struct.flg_x := @flg_x[1];
-  struct.top := @top[1];
-
-  NRestricciones:=struct.NRestricciones;
-
-  struct.flg_y := @flg_y[1];
-  struct.left := @left[1];
-
-  struct.lstvents := @lstvents[0]; // lstvents y lstAcoplesVEnts indexan en 0
-
-  for kVariableEntera:=0 to NVEnts-1 do
-  begin
- 	// El cero del acceso corresponde al unico acople que tiene esta sala
-	// Falta resolver el caso donde puede variar la cantidad de acoples de una 
-	// variable entera
-	// Luego 0 para ivar
-	//       1 para ires 
-    struct.lstAcoplesVEnts[kVariableEntera*2 + 0] := lstAcoplesVEnts[kVariableEntera][0].ivar;
-    struct.lstAcoplesVEnts[kVariableEntera*2 + 1] := lstAcoplesVEnts[kVariableEntera][0].ires;
-  end;  
-
-  for kRestriccion:=0 to NRestricciones do
-  begin
-    for kVariable:=0 to NVariables do
-      struct.mat[kRestriccion*(NVariables+1) + kVariable]:=e(kRestriccion + 1, kVariable + 1);
-  end;
-*)
 end;
 
 procedure TMIPSimplex.loadFromStruct(struct: TSimplexGPUsOLD);
