@@ -12,7 +12,7 @@ const double CasiCero_Simplex = 1.0E-7;
 // const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Double, CONFIRMAR SI ESTO ES CORRECTO (double 64 bits, 11 exponente y 53 mantisa, 53 log10(2) ≈ 15.955 => 2E−53 ≈ 1.11 × 10E−16 => EPSILON  ≈ 1.0E-16)
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
-const double M = 100; //100; //sqrt(MaxNReal);
+const double M = 900000000; //100; //sqrt(MaxNReal);
 
 void resolver_cpu(TabloideGPUs &simplex) ;
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
@@ -201,6 +201,8 @@ void resolver_ejemplo2trasnform() {
 void resolver_cpu(TabloideGPUs &tabloide) {
 	TSimplexGPUs simplex = desestructurarTabloide(tabloide);
 	
+	printStatus(simplex);
+	
 	moverseASolFactible(simplex);
 	agregarRestriccionesCotaSup(simplex);
 	agregarVariablesHolguraArtificiales(simplex);
@@ -256,20 +258,21 @@ void moverseASolFactible(TSimplexGPUs &smp) {
 void agregarRestriccionesCotaSup(TSimplexGPUs &smp) {
 	int qrest = smp.rest_ini;
 	for (int i = 0; i < smp.var_x; i++) {
-		if (smp.flg_x[i] == 1) {
+		if (smp.flg_x[i] > 0) {
 			smp.flg_y[(smp.rest_ini + i)*smp.mat_adv_row] = 1;
 			smp.Xb[(smp.rest_ini + i)*smp.mat_adv_row] = smp.sup[i];
 			for (int j = 0; j < smp.var_x; j++) smp.matriz[qrest*smp.mat_adv_row + j] = (qrest == (j + smp.rest_ini))? 1 : 0;
 			qrest ++;
 		}
 	}
-	printf("%i / %i \n", smp.rest_fin, smp.rest_ini + qrest);
+	printf("Rest count %i / %i \n", smp.rest_fin, qrest);
 	if (smp.rest_fin != qrest) printf("DISCREPANCIA EN LA CANTIDAD DE RESTRICCIONES FINAL\n");
 }
 
 void agregarVariablesHolguraArtificiales(TSimplexGPUs &smp) {
 	int var_s, var_a, var_count;
 	var_s = 0; var_a = 0; var_count = smp.var_x;
+	
 	for (int i = 0; i < smp.var_x; i++) {
 		smp.var_type[i] = 0;
 		smp.top[i] = i + 1;
@@ -329,6 +332,7 @@ void agregarVariablesHolguraArtificiales(TSimplexGPUs &smp) {
 		}
 	}
 	
+	printf("Var count %i / %i \n", smp.var_all, var_count);
 	if (smp.var_all != var_count) printf("DISCREPANCIA EN LA CANTIDAD DE VARIABLES FINAL\n");
 	
 }
@@ -364,7 +368,7 @@ void resolver_simplex_big_m(TSimplexGPUs &simplex) {
 		
 		it++;
 		
-		if (it == 14) {
+		if (it == 64) {
 			printf("Max %i iterations achieved\n", it);
 			return;
 		}
@@ -467,7 +471,7 @@ void printStatus(TSimplexGPUs &smp) {
 	printf("%s, (%i, %i)\n", "Tabloide", smp.rest_fin + 6, smp.mat_adv_row);
 	for(int i = 0; i < smp.rest_fin + 6; i++) {
 		for(int j = 0; j < smp.mat_adv_row; j++) {
-			printf("%.1f\t", smp.tabloide[i*smp.mat_adv_row + j] );
+			printf("%.2f\t", (double) smp.tabloide[i*smp.mat_adv_row + j] );
 			//printf("%E \t", smp.tabloide[i*smp.NColumnas + j] );
 			//printf("(%i,%i,%i)%f  \t", i, j, (i*smp.NColumnas) + j, smp.tabloide[(i*smp.NColumnas) + j]);
 		}

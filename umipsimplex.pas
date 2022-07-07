@@ -799,12 +799,13 @@ begin
           cantcotasup := cantcotasup + 1;
   end;
 
-  cantVars :=  NVariables + NRestricciones;
+  cantVars :=  NVariables + cantcotasup;
+
   for i := 1 to NRestricciones do
   begin
        if (flg_y[i] = 0) then
        begin
-          if (self.e(i, nc) < 0) then
+          if (self.e(i, nc) <= 0) then
           begin
              cantVars := cantVars + 2;
           end
