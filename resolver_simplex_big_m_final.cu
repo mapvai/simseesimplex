@@ -12,7 +12,7 @@ const double CasiCero_Simplex = 1.0E-7;
 // const double AsumaCero =  1.0E-16; // EPSILON de la maquina en cuentas con Double, CONFIRMAR SI ESTO ES CORRECTO (double 64 bits, 11 exponente y 53 mantisa, 53 log10(2) ≈ 15.955 => 2E−53 ≈ 1.11 × 10E−16 => EPSILON  ≈ 1.0E-16)
 const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
-const double M = 900000000; //100; //sqrt(MaxNReal);
+const double M = sqrt(MaxNReal); //100; //sqrt(MaxNReal);
 
 void resolver_cpu(TabloideGPUs &simplex) ;
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
@@ -368,7 +368,7 @@ void resolver_simplex_big_m(TSimplexGPUs &simplex) {
 		
 		it++;
 		
-		if (it == 64) {
+		if (it == 128) {
 			printf("Max %i iterations achieved\n", it);
 			return;
 		}
@@ -415,7 +415,7 @@ int locate_min_ratio(TSimplexGPUs &smp, int zpos) {
 		if (denom > CasiCero_Simplex) {
 			qy = smp.Xb[y*smp.mat_adv_row] / denom;
 			printf(" (%.1f)\t",  qy);
-			if (qy > 0 && qy < min_apy) {
+			if (qy > -CasiCero_Simplex && qy < min_apy) {
 				mejory = y;
 				min_apy = qy;
 			}
@@ -430,7 +430,7 @@ int locate_min_ratio(TSimplexGPUs &smp, int zpos) {
 
 bool intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 
-	double m, invPiv;
+	double m, invPiv; //, ck;
 	int i, j, ipos, k;
 	
 	invPiv = 1 / smp.matriz[kfil * smp.mat_adv_row + jcol];
@@ -461,7 +461,9 @@ bool intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	smp.top[jcol] = smp.left[kfil*smp.mat_adv_row];
 	smp.left[kfil*smp.mat_adv_row] = k;
 	
-	smp.Cb[kfil*smp.mat_adv_row] = smp.z[jcol] ;
+	// ck = smp.Cb[kfil*smp.mat_adv_row];
+	smp.Cb[kfil*smp.mat_adv_row] = smp.z[jcol];
+	// smp.z[jcol] = ck;
 	
 	return true;
  }
@@ -509,7 +511,7 @@ void printResult(TSimplexGPUs &smp) {
 		}
 	}
 	
-	printf("Z min = %.2f \n", min);
+	printf("Z min = %.2f \n", -min);
 	
 }
 
