@@ -10,6 +10,27 @@ const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
 const double M = 1.0E+150; //100; //sqrt(MaxNReal);
 
+
+// 8 * 32 = 256
+const int BLOCK_SIZE_E_1X = 32;  // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#thread-hierarchy the arrange of the warp in the block is giving for a two-dimensional block of size (Dx, Dy),the thread ID of a thread of index (x, y) is (x + y Dx)
+const int BLOCK_SIZE_E_1Y = 8;
+
+// 8 * 32 = 256
+const int BLOCK_SIZE_E_2X = 32;
+const int BLOCK_SIZE_E_2Y = 8;
+
+// 8 * 32 = 256
+const int BLOCK_SIZE_E_3X = 32;
+const int BLOCK_SIZE_E_3Y = 8;
+
+// 8 * 32 = 256
+const int BLOCK_SIZE_E_4X = 32;
+const int BLOCK_SIZE_E_4Y = 8;
+
+// 8 * 32 = 256
+const int BLOCK_SIZE_E_5X = 32;
+const int BLOCK_SIZE_E_5Y = 8;
+
 __device__ TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
 __device__ void moverseASolFactible(TabloideGPUs &tabloide);
 __device__ void agregarRestriccionesCotaSup(TabloideGPUs &tabloide);
@@ -69,7 +90,7 @@ extern "C" void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs 
 	// Ejecuto los kernels
 	// const dim3 DimBlock_e1(maxRest, 1);
 	const dim3 DimGrid_e1(NTrayectorias, 1);
-	const dim3 DimBlock_e1(1, 1);
+	const dim3 DimBlock_e1(BLOCK_SIZE_E_1X, BLOCK_SIZE_E_1Y);
 	kernel_resolver_etapa_moverse_a_sol_factible<<< DimGrid_e1, DimBlock_e1, 0, 0 >>>(d_simplex_array);
 	cudaDeviceSynchronize();
 	err = cudaGetLastError(); 
@@ -155,13 +176,15 @@ __device__ void moverseASolFactible(TabloideGPUs &tabloide) {
 	
 	TSimplexGPUs smp = desestructurarTabloide(tabloide);
 	
-	for (int i = 0; i < smp.rest_ini; i++) {
+	for (int i = threadIdx.y; i < smp.rest_ini; i+= BLOCK_SIZE_E_1Y) {
 		if (smp.Xb[i*smp.mat_adv_row] < 0) {
-			smp.Xb[i*smp.mat_adv_row] *= -1;
-			for (int j = 0; j < smp.var_x; j++) {
+			if (threadIdx.y == 0) {
+				smp.Xb[i*smp.mat_adv_row] *= -1;
+				smp.flg_y[i*smp.mat_adv_row] = (smp.flg_y[i*smp.mat_adv_row] == 0) ? 1 : 2; // Move >= to <=
+			}
+			for (int threadIdx.x = 0; j < smp.var_x; j+= BLOCK_SIZE_E_1X) {
 				smp.matriz[i*smp.mat_adv_row + j] *= -1;
 			}
-			smp.flg_y[i*smp.mat_adv_row] = (smp.flg_y[i*smp.mat_adv_row] == 0) ? 1 : 2; // Move >= to <=
 		}
 	}
 	
@@ -198,12 +221,14 @@ __device__ void agregarVariablesHolguraArtificiales(TabloideGPUs &tabloide) {
 		smp.top[i] = i + 1;
 	}
 	
+	/* Esto ya deberia venir completo desde la CPU
 	// Completo con 0s la matriz
 	for (int i = 0; i < smp.rest_fin; i++) {
 		for (int j = var_count; j < smp.var_all; j++) {
 			smp.matriz[i*smp.mat_adv_row + j] = 0;
 		}
 	}
+	*/
 	
 	for (int i = 0; i < smp.rest_fin; i++) {
 		if (smp.flg_y[i*smp.mat_adv_row] == 0) { // rest >=
