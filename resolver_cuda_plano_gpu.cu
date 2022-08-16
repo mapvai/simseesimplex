@@ -392,11 +392,11 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	}
 	
 	/* Sequential Addressing
-	for (unsigned int s = smp.var_all; s > 0; s >>= 1) {
+	for (unsigned int s = smp.var_all/2; s > 0; s >>= 1) {
 		if (thd_indx < s) {
-			if (apz_indx[index + s] >= 0 &&  apz_acc[index + s] && (apz_indx[index] < 0 || apz_acc[index + s] < apz_acc[index])) {			
-				apz_indx[index]  = apz_indx[index + s];
-				apz_acc[index] = apz_acc[index + s];
+			if (apz_indx[thd_indx + s] >= 0 &&  apz_acc[thd_indx + s] && (apz_indx[thd_indx] < 0 || apz_acc[thd_indx + s] < apz_acc[thd_indx])) {			
+				apz_indx[thd_indx]  = apz_indx[thd_indx + s];
+				apz_acc[thd_indx] = apz_acc[thd_indx + s];
 			}
 		}
 		__syncthreads();
@@ -499,9 +499,7 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 			for (j = threadIdx.x; j < smp.var_all; j += blockDim.x) { // Modifico la Matriz
 				if (j != jcol) {
 					smp.matriz[i *smp.mat_adv_row + j] -= m * smp.matriz[kfil*smp.mat_adv_row + j]; // Aca esta actualizacion se hace coalesced y como es la mas importante podemos decir que el acceso es coalesced mayoritariamente
-				} // else {
-					// smp.matriz[i*smp.mat_adv_row + j] = 0; // Esto lo saque para afuera para generar menos divergencia
-				// }
+				}
 			}
 		}
 	}
