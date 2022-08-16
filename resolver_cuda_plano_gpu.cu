@@ -479,14 +479,16 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	
 	ipos = kfil * smp.mat_adv_row;
 	smp.Xb[kfil*smp.mat_adv_row] *= invPiv; // Modifico Xb
-	for (j = thd_indx; j < smp.var_all; j+= block_dim) { // Modifico la k fila
+	for (j = thd_indx; j < smp.var_all; j+= block_dim) { // Modifico la fila k
 		smp.matriz[ipos + j] *= invPiv;
 	}
 	
-	if (thd_indx == 0) smp.matriz[kfil * smp.mat_adv_row + jcol] = 1;
-	if (thd_indx < smp.rest_fin) smp.matriz[thd_indx*smp.mat_adv_row + jcol] = 0; 
+	for (i = thd_indx; j < smp.rest_fin; i+= block_dim) { // Modifico la columna j
+		smp.matriz[i*smp.mat_adv_row + jcol] = 0; 
+	}
 	
-	// Analizar cambio en recorrida de modo que sea coalesced !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	if (thd_indx == 0) smp.matriz[kfil * smp.mat_adv_row + jcol] = 1; // Modifico el pivote
+	
 	for (i = threadIdx.y; i < smp.rest_fin; i += blockDim.y) {
 		if (i != kfil) {
 			m = smp.matriz[i *smp.mat_adv_row + jcol];
@@ -496,7 +498,7 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 			
 			for (j = threadIdx.x; j < smp.var_all; j += blockDim.x) { // Modifico la Matriz
 				if (j != jcol) {
-					smp.matriz[i *smp.mat_adv_row + j] -= m * smp.matriz[kfil*smp.mat_adv_row + j]; 
+					smp.matriz[i *smp.mat_adv_row + j] -= m * smp.matriz[kfil*smp.mat_adv_row + j]; // Aca esta actualizacion se hace coalesced y como es la mas importante podemos decir que el acceso es coalesced mayoritariamente
 				} // else {
 					// smp.matriz[i*smp.mat_adv_row + j] = 0; // Esto lo saque para afuera para generar menos divergencia
 				// }
