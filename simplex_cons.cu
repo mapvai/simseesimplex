@@ -8,8 +8,8 @@
 __constant__ double CasiCero_Simplex = 1.0E-7;
 // const double MaxNReal = 1.7E+308; // Aprox, CONFIRMAR SI ESTO ES CORRECTO
 
-__constant__ double M = 1.0E+150; //100; //sqrt(MaxNReal);
-const double eMe = 1.0E+150;
+__constant__ double M = 1.0E+150; // 1.0E+150; 100; //sqrt(MaxNReal);
+const double eMe = 1.0E+150; // 1.0E+150; 100;
 
 const int MAX_VARS = 256; // Esto sera usado para pedir shared memory
 const int MAX_RES = 256; // Esto sera usado para pedir shared memory
@@ -29,7 +29,7 @@ const int BLOCK_SIZE_E_3Y = 1;
 const int BLOCK_SIZE_E_4X = 32;
 const int BLOCK_SIZE_E_4Y = 4;
 
-const int MAX_SIMPLEX_ITERATIONS = 128;
+const int MAX_SIMPLEX_ITERATIONS = 128; // 128;
 
 __device__ TSimplexGPUs desestructurarTabloideDeb(TabloideGPUs &tabloide);
 __device__ void moverseASolFactible(TabloideGPUs &tabloide);
@@ -63,13 +63,20 @@ __global__ void kernel_resolver_simplex_big_m(TDAOfSimplexGPUs simplex_array) {
 	resolver_simplex_big_m(simplex_array[blockIdx.x]);
 }
 
+__global__ void kernel_test(TDAOfSimplexGPUs d_simplex_array) {
+	printf("Hello World from GPU!\n");
+	printf("%.2f\n", d_simplex_array[0][2]);
+	printf("%.2f\n", d_simplex_array[0][16]);
+	printf("End test GPU!\n");
+}
+
 void printResult(TSimplexGPUs &smp);
 void printStatus(TSimplexGPUs &smp);
 int findVarIndex(TSimplexGPUs &smp, int indx);
 double findVarXbValue(TSimplexGPUs &smp, int indx);
 TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide);
 
-void ini_mem(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias);
+void ini_mem(TDAOfSimplexGPUs simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias);
 void free_mem(TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias);
 
 void resolver_ejemplo1();
@@ -253,10 +260,17 @@ void resolver_ejemplo2trasnform() {
 	*/
 	
 	int NTrayectorias = 1;
-	TDAOfSimplexGPUs simplex_array = (TabloideGPUs*)malloc(sizeof(TabloideGPUs));
+	TDAOfSimplexGPUs simplex_array = (TabloideGPUs*)malloc(NTrayectorias*sizeof(TabloideGPUs));
 	simplex_array[0] = tabloide;
 	
-	ini_mem(simplex_array, d_simplex_array, h_simplex_array, 1);
+	TSimplexGPUs smp = desestructurarTabloide(simplex_array[0]);
+	
+	printStatus(smp);
+	
+	ini_mem(simplex_array, d_simplex_array, h_simplex_array, NTrayectorias);
+	
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 1 error", cudaGetErrorString(err));
 	
 	// Ejecuto los kernels
 	const dim3 DimGrid_e1(NTrayectorias, 1);
@@ -266,7 +280,6 @@ void resolver_ejemplo2trasnform() {
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 1 error", cudaGetErrorString(err));
 	
-	/*
 	const dim3 DimGrid_e2(NTrayectorias, 1);
 	const dim3 DimBlock_e2(BLOCK_SIZE_E_2X, BLOCK_SIZE_E_2Y);
 	kernel_resolver_etapa_agregar_restricciones_cota_sup<<< DimGrid_e2, DimBlock_e2, 0, 0 >>>(d_simplex_array);
@@ -287,44 +300,49 @@ void resolver_ejemplo2trasnform() {
 	cudaDeviceSynchronize();
 	err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 4 error", cudaGetErrorString(err));
-	*/
-	
-	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TabloideGPUs), cudaMemcpyDeviceToHost);
-	
+
 	int largo, alto;
 	
+	// cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TabloideGPUs), cudaMemcpyDeviceToHost);
+	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		largo = (int) simplex_array[kTrayectoria][3];
+		largo = (int) simplex_array[kTrayectoria][2];
 		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
 		cudaMemcpy(simplex_array[kTrayectoria], h_simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyDeviceToHost);
+		err = cudaGetLastError(); 
+		if (err != cudaSuccess) printf("%s: %s\n", "CUDA 4 error", cudaGetErrorString(err));
 	}
 	
-	TSimplexGPUs smp = desestructurarTabloide(simplex_array[0]);
+	smp = desestructurarTabloide(simplex_array[0]);
 	
 	printStatus(smp);
 	
 	free_mem(d_simplex_array, h_simplex_array, NTrayectorias);
+	free(h_simplex_array);
+	free(tabloide);
 
 }
 
-void ini_mem(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
+void ini_mem(TDAOfSimplexGPUs simplex_array, TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 	
 	int largo, alto;
 	
 	h_simplex_array = (TabloideGPUs*)malloc(NTrayectorias*sizeof(TabloideGPUs));
-	cudaMalloc(&d_simplex_array, NTrayectorias*sizeof(TabloideGPUs));
-
-	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		
-		largo = (int) simplex_array[kTrayectoria][3];
-		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
-		cudaMalloc(&h_simplex_array[kTrayectoria], largo*alto*sizeof(double));
-		cudaMemcpy(simplex_array[kTrayectoria], d_simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyHostToDevice);
 	
+	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
+		largo = (int) simplex_array[kTrayectoria][2];
+		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
+		
+		cudaMalloc(&h_simplex_array[kTrayectoria], largo*alto*sizeof(double));
+		cudaMemcpy(h_simplex_array[kTrayectoria], simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyHostToDevice);
 	}
-
+	
+	cudaMalloc(&d_simplex_array, NTrayectorias*sizeof(TabloideGPUs));
 	cudaMemcpy(d_simplex_array, h_simplex_array, NTrayectorias*sizeof(TabloideGPUs), cudaMemcpyHostToDevice);
- 
+	
+	cudaError_t err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA ini_mem inside error", cudaGetErrorString(err));
+	
 }
 
 void free_mem(TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
@@ -388,7 +406,7 @@ void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_
 	cudaMemcpy(h_simplex_array, d_simplex_array, NTrayectorias*sizeof(TabloideGPUs), cudaMemcpyDeviceToHost);
 
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		largo = (int) simplex_array[kTrayectoria][3];
+		largo = (int) simplex_array[kTrayectoria][2];
 		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
 		cudaMemcpy(simplex_array[kTrayectoria], h_simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyDeviceToHost);
 	}
@@ -466,6 +484,9 @@ TSimplexGPUs desestructurarTabloide(TabloideGPUs &tabloide) {
 __device__ void moverseASolFactible(TabloideGPUs &tabloide) {
 	
 	TSimplexGPUs smp = desestructurarTabloideDeb(tabloide);
+	
+	if (threadIdx.x == 0 && threadIdx.y == 0) printStatusDev(smp);
+	
 	/*
 		Oprimizacion a desestructurarTabloideDeb
 		TSimplexGPUs smp;
@@ -477,20 +498,22 @@ __device__ void moverseASolFactible(TabloideGPUs &tabloide) {
 		smp.matriz = &tabloide[6*smp.mat_adv_row + 4];
 	*/
 	
-	
-	for (int i = threadIdx.y; i < smp.rest_ini; i+= blockDim.y) {
-		if (smp.Xb[i*smp.mat_adv_row] < 0) {
-			if (threadIdx.y == 0) {
-				smp.Xb[i*smp.mat_adv_row] *= -1;
+	for (int i = threadIdx.y; i < smp.rest_ini; i += blockDim.y) {
+	// if (threadIdx.x < 4) printf("%.2f kk, x:%i, y:%i\n", smp.Xb[i*smp.mat_adv_row], threadIdx.x, threadIdx.y);	
+	if (smp.Xb[i*smp.mat_adv_row] < 0) {
+			if (threadIdx.x == 0) {
+				smp.Xb[i*smp.mat_adv_row] *= -1;	
 				smp.flg_y[i*smp.mat_adv_row] = (smp.flg_y[i*smp.mat_adv_row] == 0) ? 1 : 2; // Move >= to <=
 			}
-			for (int j = threadIdx.x; j < smp.var_x; j+= blockDim.x) {
+			for (int j = threadIdx.x; j < smp.var_x; j += blockDim.x) {
 				smp.matriz[i*smp.mat_adv_row + j] *= -1;
 			}
 		}
 	}
 	
-	//__syncthreads();
+	__syncthreads();
+	
+	// if (threadIdx.x == 0 && threadIdx.y == 0) printStatusDev(smp);
 }
 
 // No es paralelizable a nivel de bloque. La variable qrest es actualizado en cada bucle, y las celdas a las que se acceden dependen de ese valor, por las actualizaciones a la matriz se deben ejecutar en orden.
@@ -510,6 +533,8 @@ __device__ void agregarRestriccionesCotaSup(TabloideGPUs &tabloide) {
 	}
 	// printf("Rest count %i / %i \n", smp.rest_fin, qrest);
 	if (smp.rest_fin != qrest) printf("DISCREPANCIA EN LA CANTIDAD DE RESTRICCIONES FINAL\n");
+	
+	// printStatusDev(smp);
 	
 }
 
@@ -585,6 +610,8 @@ __device__ void agregarVariablesHolguraArtificiales(TabloideGPUs &tabloide) {
 	//printf("Var count %i / %i \n", smp.var_all, var_count);
 	if (smp.var_all != var_count) printf("DISCREPANCIA EN LA CANTIDAD DE VARIABLES FINAL\n");
 	
+	printStatusDev(smp);
+	
 }
 
 __device__ void resolver_simplex_big_m(TabloideGPUs &tabloide) {
@@ -625,9 +652,9 @@ __device__ void resolver_simplex_big_m(TabloideGPUs &tabloide) {
 		}
 		
 		intercambiarvars(simplex, qpos, zpos);
-		__syncthreads();
 		
 		if (threadIdx.x == 0 && threadIdx.y == 0) printStatusDev(simplex);
+		__syncthreads();
 		
 		it++;
 		
@@ -649,51 +676,163 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	int top;
 	int thd_indx = threadIdx.y*blockDim.x + threadIdx.x;
 	
-	// inicializo Zj 
+	// inicializo Cj - Zj con -Zj
+	for (unsigned int x = thd_indx; x < smp.var_all; x += blockDim.y*blockDim.x){
+		apz_indx[x] = x;
+	}
 	for (unsigned int x = thd_indx; x < smp.var_all; x += blockDim.y*blockDim.x){
 		top = smp.top[x] - 1;
-		if (smp.var_type[top] != 2) { // it is not an artificial variable
-			apz_acc[x] = -smp.z[x];
-			apz_indx[x] = x;
-		} else {
+		apz_acc[x] = -smp.z[x];
+		if (smp.var_type[top] == 2) { // it is not an artificial variable
 			apz_indx[x] = -1; // Asi lo excluyo en la reduccion(apz_indx[z] < 0...)
 		}
 	}
+	__syncthreads();
 	
-	for (unsigned int x = threadIdx.x; x < smp.var_all; x += blockDim.x) {
-		if (apz_indx[x] != -1) {
-			for (unsigned int y = threadIdx.y; y < smp.rest_fin; y += blockDim.y) {
-				apz_acc_mat[threadIdx.y][threadIdx.x] = smp.Cb[y*smp.mat_adv_row] * smp.matriz[y*smp.mat_adv_row + x]; // Carga el bloque en shared memory
-				__syncthreads();
-				// Reduccion Interleaved Addressing en el bloque en shared memory
-				for (unsigned int s = 1; s < blockDim.y; s *= 2) {
-					int index = 2 * s * threadIdx.y;
-					if (index < blockDim.y) {
-						apz_acc_mat[index][threadIdx.x] = apz_acc_mat[index + s][threadIdx.x];
-					}
-					__syncthreads();
-				}
-				if (threadIdx.y == 0) apz_acc[x] += apz_acc_mat[0][threadIdx.x]; // Accumulo el resultado parcial en el vector final
-			}
+	// Print vector -Z, remover luego
+	if (thd_indx == 0) {
+		printf("-Z: ");
+		for (unsigned int x = 0; x < smp.var_all; x ++){
+			printf("%i %.2f\t",  apz_indx[x], apz_acc[x]);
 		}
+		printf("\n");
+	}
+	
+	// Calcular Cj - Zj y acumularlo en apz_acc
+	unsigned int y = threadIdx.y;
+	unsigned int x = threadIdx.x;
+	cargar_tilt:
+	if (y < smp.rest_fin && x < smp.var_all) apz_acc_mat[threadIdx.y][threadIdx.x] = smp.Cb[y*smp.mat_adv_row] * smp.matriz[y*smp.mat_adv_row + x];
+	
+	__syncthreads();
+	
+	/* Imprimir tile antes de la reduccion
+	if (thd_indx == 0) {
+		for (unsigned int i = 0; i < blockDim.y && i < smp.rest_fin; i ++){
+			printf("fila %i:\t", i);
+			for (unsigned int j = 0; j < blockDim.x && j < smp.var_all; j ++){	
+				printf("%.2f\t",  apz_acc_mat[i][j]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+	}
+	*/
+	
+	// Reduccion Interleaved Addressing en el bloque en shared memory
+	for (unsigned int s = 1; s < blockDim.y; s *= 2) {
+		int index = 2 * s * threadIdx.y;
+		if (index < blockDim.y && (y + index + s) < smp.rest_fin && x < smp.var_all) {
+			apz_acc_mat[index][x] += apz_acc_mat[index + s][threadIdx.x];
+		}
+		__syncthreads();
+	}
+	
+	if (threadIdx.y == 0 && x < smp.var_all) apz_acc[x] += apz_acc_mat[0][threadIdx.x]; // Accumulo el resultado parcial en el vector final
+	
+	/* Imprimir tile despues de la reduccion
+	if (thd_indx == 0) {
+		for (unsigned int y = 0; y < blockDim.y && y < smp.rest_fin; y ++){
+			printf("fila %i:\t",  y);
+			for (unsigned int x = 0; x < blockDim.x && x < smp.var_all; x ++){	
+				printf("%.2f\t", apz_acc_mat[y][x]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+	}
+	*/
+	
+	__syncthreads();
+	
+	x += blockDim.x;
+	if ((x - threadIdx.x) < smp.var_all) {
+		goto cargar_tilt;
+	}
+	y += blockDim.y;
+	if ((y - threadIdx.y) < smp.rest_fin) {
+		x = threadIdx.x;
+		goto cargar_tilt;
+	}
+	
+	/* // Este codigo intrenta hacer el mismo trabajo que "Calcular Cj - Zj y acumularlo en apz_acc" pero genera un deadlock al agregar un __syncthreads() despues los bucles
+	   // Creo que es pq no todos los hilos arrivan al punto de __syncthreads()
+	for (unsigned int y = threadIdx.y; y < smp.rest_fin; y += blockDim.y) {
+		for (unsigned int x = threadIdx.x; x < smp.var_all; x += blockDim.x) {
+			// printf("[%i, %i] mete [%i, %i] saltando %i\n",  threadIdx.y, threadIdx.x, y, x, smp.mat_adv_row);
+			apz_acc_mat[threadIdx.y][threadIdx.x] = smp.matriz[y*smp.mat_adv_row + x];
+			
+			__syncthreads();
+			if (thd_indx == 0) {
+				for (unsigned int y = 0; y < blockDim.y && y < smp.rest_fin; y ++){
+					printf("fila %i:\t",  y);
+					for (unsigned int x = 0; x < blockDim.x && x < smp.var_all; x ++){	
+						printf("%.2f\t",  apz_acc_mat[y][x]);
+					}
+					printf("\n");
+				}
+				printf("\n");
+			}
+			__syncthreads();
+			// Reduccion Interleaved Addressing en el bloque en shared memory
+			for (unsigned int s = 1; s < blockDim.y; s *= 2) {
+				int index = 2 * s * threadIdx.y;
+				if (index < blockDim.y && (y + index + s) < smp.rest_fin && x < smp.var_all) {
+					apz_acc_mat[index][x] += apz_acc_mat[index + s][threadIdx.x];
+				}
+				__syncthreads();
+			}
+			
+			__syncthreads();
+			
+			if (threadIdx.y == 0 && x < smp.var_all) apz_acc[x] += apz_acc_mat[0][threadIdx.x]; // Accumulo el resultado parcial en el vector final
+			
+			if (thd_indx == 0) {
+				for (unsigned int y = 0; y < blockDim.y && y < smp.rest_fin; y ++){
+					printf("fila %i:\t",  y);
+					for (unsigned int x = 0; x < blockDim.x && x < smp.var_all; x ++){	
+						printf("%.2f\t", apz_acc_mat[y][x]);
+					}
+					printf("\n");
+				}
+				printf("\n");
+			}
+			__syncthreads();
+		}
+	}
+	*/
+	
+	// Imprimir Vector Cj - Zj final, eliminar luego
+	if (thd_indx == 0) {
+		printf("Cj - Zj final: ");
+		for (unsigned int x = 0; x < smp.var_all; x ++) {
+			printf("%.2f\t", apz_acc[x]);
+		}
+		printf("\n");
 	}
 	
 	// Condicion los hilos en el bloque deben ser mayor o igual que var_all sino hay que agregar un bucle mas para que se procesen el resto del los valores en la reduccion
 	if (thd_indx == 0 && smp.var_all > (blockDim.x * blockDim.y)) printf("Condicion los hilos en el bloque deben ser mayor o igual que var_all \n");
 	
+	__syncthreads();
+	
 	// Reduccion Interleaved Addressing
 	for (unsigned int s = 1; s < smp.var_all; s *= 2) {
 		int index = 2 * s * thd_indx;
-		if (index < smp.var_all && (index + s) < smp.var_all) {
+		
+		// printf("[%i <- %i]\t", index, index + s);
+		// if (index < smp.var_all && (index + s) < smp.var_all) {
+		if ((index + s) < smp.var_all) {	
 			if (apz_indx[index + s] >= 0 &&  apz_acc[index + s] < 0 && (apz_indx[index] < 0 || apz_acc[index + s] < apz_acc[index])) {			
 				apz_indx[index]  = apz_indx[index + s];
 				apz_acc[index] = apz_acc[index + s];
+				// printf("inside l %.2f at %i\t", apz_acc[index + s], apz_indx[index + s] );
 			}
 		}
 		__syncthreads();
 	}
 	
-	/* Sequential Addressing
+	/* Sequential Addressing, hacer algun test de performace para evaluar la mejora que esto conlleva
 	for (unsigned int s = smp.var_all/2; s > 0; s >>= 1) {
 		if (thd_indx < s) {
 			if (apz_indx[thd_indx + s] >= 0 &&  apz_acc[thd_indx + s] && (apz_indx[thd_indx] < 0 || apz_acc[thd_indx + s] < apz_acc[thd_indx])) {			
@@ -705,6 +844,8 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	}
 	*/
 	
+	__syncthreads();
+	
 	// Escribir resultado
 	if (thd_indx == 0) {
 		if (apz_indx[0] >= 0 && apz_acc[0] < 0) {
@@ -712,9 +853,11 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		} else {
 			zpos = -1;
 		}
-		// printf("MIn Zj-Cj: %f\n",  apz_acc[0]);
+		printf("\nMin Cj-Zj: ind %i val %.2f\n",  apz_indx[0], apz_acc[0]); // Imprimir resultado, eliminar luego
 	}
 	__syncthreads();
+	
+	return;
 	
 }
 
@@ -728,7 +871,7 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 	double denom;
 	
 	// Condicion los hilos en el bloque deben ser mayor o igual que var_all sino hay que agregar un bucle mas para que se proesen el resto del los valores en la reduccion
-	if (thd_indx == 0 && smp.rest_fin > (blockDim.x * blockDim.y)) printf("Condicion los hilos en el bloque deben ser mayor o igual que rest_fin \n");
+	if (thd_indx == 0 && smp.rest_fin * 2 > (blockDim.x * blockDim.y)) printf("Condicion los hilos en el bloque deben ser mayor o igual que 2 x rest_fin \n");
 	
 	// Cargo los valores en memoria compartida
 	if (thd_indx < smp.rest_fin)  {
@@ -739,22 +882,47 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 		} else {	
 			apy_indx[thd_indx] = -1; // Asi lo excluyo en la reduccion(apy_indx[z] < 0...)
 		}
+		// printf("%i: %.1f / %.1f (%i)\t", thd_indx, smp.Xb[thd_indx*smp.mat_adv_row], denom, apy_indx[thd_indx]);
 	}
 	
+	/*
+	__syncthreads();
+	if (thd_indx == 0) {
+		printf("\nantes:\n");
+		for (int l = 0; l < smp.rest_fin; l++) {
+			printf("%i: %.2f at %i\t", l, apy_acc[l], apy_indx[l]);
+		}
+		printf("\n");
+	}
+	*/
 	__syncthreads();
 	
 	// Reduccion
 	// Interleaved Addressing
 	for (unsigned int s = 1; s < smp.rest_fin; s *= 2) {
 		int index = 2 * s * thd_indx;
-		if (index < smp.rest_fin) {			
+		if ((index + s) < smp.rest_fin) {
+			// printf("%i: %i, %.2f, %i, %.2f, %.2f\t", index, apy_indx[index + s], apy_acc[index + s], apy_indx[index], apy_acc[index + s], apy_acc[index]);			
 			if (apy_indx[index + s] >= 0 &&  apy_acc[index + s]  > -CasiCero_Simplex && (apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index])) {			
-				apy_indx[index]  = apy_indx[index + s];
+				apy_indx[index] = apy_indx[index + s];
 				apy_acc[index] = apy_acc[index + s];
+				// printf("\nnew min %.2f at %i\n", apy_acc[index], index);
 			}
 		}
 		__syncthreads();
 	}
+	
+	/*
+	__syncthreads();
+	if (thd_indx == 0) {
+		printf("\ndespues:\n");
+		for (int l = 0; l < smp.rest_fin; l++) {
+			printf("%i: %.2f at %i\t", l, apy_acc[l], apy_indx[l]);
+		}
+		printf("\n");
+	}
+	*/
+	__syncthreads();
 	
 	// Escribir resultado
 	if (thd_indx == 0) {
@@ -763,7 +931,7 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 		} else {
 			qpos = -1;
 		}
-		// printf("Min Q: %f\n",  apy_acc[0]);
+		printf("Min Q: %f at %i\n",  apy_acc[0], apy_indx[0]);
 	}
 	__syncthreads();
 
@@ -780,39 +948,51 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	int block_dim = blockDim.x * blockDim.y;
 	
 	ipos = kfil * smp.mat_adv_row;
-	smp.Xb[kfil*smp.mat_adv_row] *= invPiv; // Modifico Xb
+
 	for (j = thd_indx; j < smp.var_all; j+= block_dim) { // Modifico la fila k
 		smp.matriz[ipos + j] *= invPiv;
 	}
 	
-	for (i = thd_indx; j < smp.rest_fin; i+= block_dim) { // Modifico la columna j
-		smp.matriz[i*smp.mat_adv_row + jcol] = 0; 
-	}
-	
-	if (thd_indx == 0) smp.matriz[kfil * smp.mat_adv_row + jcol] = 1; // Modifico el pivote
+	// if (thd_indx == 0) printf("INI SWAPPING\n");
+	__syncthreads();
 	
 	for (i = threadIdx.y; i < smp.rest_fin; i += blockDim.y) {
 		if (i != kfil) {
-			m = smp.matriz[i *smp.mat_adv_row + jcol];
+			m = smp.matriz[i*smp.mat_adv_row + jcol];
 			if (threadIdx.x == 0) {
-				smp.Xb[i*smp.mat_adv_row] -= m*smp.Xb[kfil*smp.mat_adv_row]; // Modifico Xb
+				// printf("%i: %.2f - (%.2f*%.2f)\t",  i, smp.Xb[i*smp.mat_adv_row], m, smp.Xb[ipos]);
+				smp.Xb[i*smp.mat_adv_row] -= m*smp.Xb[ipos]; // Modifico Xb, m*smp.Xb[kfil * smp.mat_adv_row]
 			}
 			
 			for (j = threadIdx.x; j < smp.var_all; j += blockDim.x) { // Modifico la Matriz
 				if (j != jcol) {
-					smp.matriz[i *smp.mat_adv_row + j] -= m * smp.matriz[kfil*smp.mat_adv_row + j]; // Aca esta actualizacion se hace coalesced y como es la mas importante podemos decir que el acceso es coalesced mayoritariamente
+					smp.matriz[i*smp.mat_adv_row + j] -= m * smp.matriz[ipos + j]; // Aca esta actualizacion se hace coalesced y como es la mas importante podemos decir que el acceso es coalesced mayoritariamente
 				}
 			}
 		}
 	}
 	
-	if (thd_indx == 0) {
-		k = smp.top[jcol];
-		smp.top[jcol] = smp.left[kfil*smp.mat_adv_row];
-		smp.left[kfil*smp.mat_adv_row] = k;
-		
-		smp.Cb[kfil*smp.mat_adv_row] = smp.z[jcol];
+	__syncthreads();
+	
+	for (i = thd_indx; i < smp.rest_fin; i+= block_dim) { // Modifico la columna j
+		smp.matriz[i*smp.mat_adv_row + jcol] = 0;
 	}
+	
+	__syncthreads();
+	
+	if (thd_indx == 0) {
+		smp.matriz[ipos + jcol] = 1; // Modifico el pivote
+		smp.Xb[ipos] *= invPiv; // Modifico Xb para la kfila
+		
+		k = smp.top[jcol];
+		smp.top[jcol] = smp.left[ipos];
+		smp.left[ipos] = k;
+		
+		smp.Cb[ipos] = smp.z[jcol];
+		// printf("END SWAPPING\n");
+	}
+	__syncthreads();
+	
 	
  }
  
