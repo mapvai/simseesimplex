@@ -1,4 +1,4 @@
-typedef double * TabloideGPUs;
+typedef double* TabloideGPUs;
 
 typedef TabloideGPUs* TDAOfSimplexGPUs;
 
@@ -26,5 +26,6 @@ struct TSimplexGPUs {
 
 	double* Xb; // cantidad de restricciones, vertical
 	double* z; // funcion z, cantidad de variables, horizontal
-    double* matriz; // restricciones x variables con avance fila largo de tabloide
+    double* matriz; // restricciones x variables con avance fila largo de tabloide (mat_adv_row)
+	double* mat_ext; // Matriz extendida Xb|A
 };
