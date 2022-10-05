@@ -297,7 +297,6 @@ void resolver_ejemplo_caso_tipo() {
 		
 	TDAOfSimplexGPUs d_simplex_array; 
 	TDAOfSimplexGPUs h_simplex_array;
-	cudaError_t err;
 	TSimplexGPUs smp;
 	
 	TabloideGPUs tabloide = getTabloideCasoTipo();
@@ -311,15 +310,6 @@ void resolver_ejemplo_caso_tipo() {
 	ini_mem(simplex_array, d_simplex_array, h_simplex_array, NTrayectorias);
 	
 	resolver_cuda(simplex_array, d_simplex_array, h_simplex_array, NTrayectorias);
-
-	int largo, alto;
-	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
-		largo = (int) simplex_array[kTrayectoria][2];
-		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
-		cudaMemcpy(simplex_array[kTrayectoria], h_simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyDeviceToHost);
-		err = cudaGetLastError(); 
-		if (err != cudaSuccess) printf("%s: %s\n", "CUDA 4 error", cudaGetErrorString(err));
-	}
 	
 	smp = desestructurarTabloide(simplex_array[NTrayectorias - 1]);
 	
@@ -356,17 +346,13 @@ void ini_mem(TDAOfSimplexGPUs simplex_array, TDAOfSimplexGPUs &d_simplex_array, 
 
 void free_mem(TDAOfSimplexGPUs &d_simplex_array, TDAOfSimplexGPUs &h_simplex_array, int NTrayectorias) {
 	
-	cudaError_t err;
-	
 	for (int kTrayectoria = 0; kTrayectoria < NTrayectorias; kTrayectoria++) {
 		cudaFree(h_simplex_array[kTrayectoria]);
-		err = cudaGetLastError();
-		if (err != cudaSuccess && kTrayectoria < 5) printf("%s: %s in it %i\n", "CUDA 1 free_mem inside error", cudaGetErrorString(err), kTrayectoria);
 	}
 	
 	cudaFree(d_simplex_array);
 	
-	err = cudaGetLastError(); 
+	cudaError_t err = cudaGetLastError(); 
 	if (err != cudaSuccess) printf("%s: %s\n", "CUDA 2 free_mem inside error", cudaGetErrorString(err));
 }
 
@@ -415,13 +401,8 @@ void resolver_cuda(TDAOfSimplexGPUs &simplex_array, TDAOfSimplexGPUs &d_simplex_
 		alto = (int) simplex_array[kTrayectoria][largo + 1] + 6;
 		cudaMemcpy(simplex_array[kTrayectoria], h_simplex_array[kTrayectoria], largo*alto*sizeof(double), cudaMemcpyDeviceToHost);
 	}
-	
-	TSimplexGPUs smp = desestructurarTabloide(simplex_array[0]);
-	
-	printStatus(smp);
-	
-	free_mem(d_simplex_array, h_simplex_array, NTrayectorias);
-	free(h_simplex_array);
+	err = cudaGetLastError(); 
+	if (err != cudaSuccess) printf("%s: %s\n", "CUDA cudaMemcpy cudaMemcpyDeviceToHost error", cudaGetErrorString(err));
 
 }
 
@@ -672,8 +653,6 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	// inicializo Cj - Zj con -Zj
 	for (unsigned int x = thd_indx; x < smp.var_all; x += thds_in_block){
 		apz_indx[x] = x;
-	}
-	for (unsigned int x = thd_indx; x < smp.var_all; x += thds_in_block){
 		top = smp.top[x] - 1;
 		apz_acc[x] = -smp.z[x];
 		if (smp.var_type[top] == 2) { // it is not an artificial variable
@@ -712,12 +691,13 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		goto cargar_tile;
 	}
 	
-	// Condicion los hilos en el bloque deben ser mayor o igual que var_all sino hay que agregar un bucle mas para que se procesen el resto del los valores en la reduccion
-	if (thd_indx == 0 && smp.var_all > (blockDim.x * blockDim.y)) printf("Condicion los hilos en el bloque deben ser mayor o igual que var_all \n");
+	// Condicion los hilos en el bloque deben ser mayor o igual que var_all, sino hay que agregar un bucle mas para que se procesen el resto del los valores en la reduccion
+	if (thd_indx == 0 && smp.var_all > 2*thds_in_block) printf("Condicion los hilos en el bloque deben ser mayor o igual que var_all/2 \n");
 	
 	__syncthreads();
 	
-	// Reduccion Interleaved Addressing
+	/*
+	// Reduccion Interleaved Addressing, OLD, la siguiente reduccion secuencial mejoro el rendimiento en un 18% aprox.
 	for (unsigned int s = 1; s < smp.var_all; s *= 2) {
 		int index = 2 * s * thd_indx;
 		if ((index + s) < smp.var_all) {	
@@ -728,18 +708,33 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		}
 		__syncthreads();
 	}
+	*/
 	
-	/* Sequential Addressing, hacer algun test de performace para evaluar la mejora que esto conlleva
-	for (unsigned int s = smp.var_all/2; s > 0; s >>= 1) {
-		if (thd_indx < s) {
-			if (apz_indx[thd_indx + s] >= 0 &&  apz_acc[thd_indx + s] && (apz_indx[thd_indx] < 0 || apz_acc[thd_indx + s] < apz_acc[thd_indx])) {			
-				apz_indx[thd_indx]  = apz_indx[thd_indx + s];
-				apz_acc[thd_indx] = apz_acc[thd_indx + s];
+	// Reduccion Sequencial, esta reduccion deja el mejor en los indices i*(2*BLOCK_SIZE_E_4X) con i = 0, 1, 2....
+	int red_indx = threadIdx.y*blockDim.x*2 + threadIdx.x;
+	for (unsigned int s = BLOCK_SIZE_E_4X; s > 0; s >>= 1) {
+		if (threadIdx.x < s && (red_indx + s) < smp.var_all) {
+			if (apz_indx[red_indx + s] >= 0 &&  apz_acc[red_indx + s] < 0 && (apz_indx[red_indx] < 0 || apz_acc[red_indx + s] < apz_acc[red_indx])) {
+				apz_indx[red_indx] = apz_indx[red_indx + s];
+				apz_acc[red_indx] = apz_acc[red_indx + s];
 			}
 		}
 		__syncthreads();
 	}
-	*/
+	
+	__syncthreads();
+	
+	// Reduccion Interleaved Addressing para cada 2*BLOCK_SIZE_E_4X 
+	for (unsigned int s = 2*BLOCK_SIZE_E_4X; s < smp.var_all; s *= 2) {
+		int index = 2 * s * thd_indx;
+		if ((index + s) < smp.var_all) {
+			if (apz_indx[index + s] >= 0 &&  apz_acc[index + s] < 0 && (apz_indx[index] < 0 || apz_acc[index + s] < apz_acc[index])) {			
+				apz_indx[index]  = apz_indx[index + s];
+				apz_acc[index] = apz_acc[index + s];
+			}
+		}
+		__syncthreads();
+	}
 	
 	__syncthreads();
 	
