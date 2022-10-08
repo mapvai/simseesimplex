@@ -694,9 +694,9 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	// Condicion los hilos en el bloque deben ser mayor o igual que var_all, sino hay que agregar un bucle mas para que se procesen el resto del los valores en la reduccion
 	if (thd_indx == 0 && smp.var_all > 2*thds_in_block) printf("Condicion los hilos en el bloque deben ser mayor o igual que var_all/2 \n");
 	
-	__syncthreads();
+	//__syncthreads();
 	
-	/*
+	
 	// Reduccion Interleaved Addressing, OLD, la siguiente reduccion secuencial mejoro el rendimiento en un 18% aprox.
 	for (unsigned int s = 1; s < smp.var_all; s *= 2) {
 		int index = 2 * s * thd_indx;
@@ -708,15 +708,15 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		}
 		__syncthreads();
 	}
-	*/
 	
+	/*
 	// Reduccion Sequencial, esta reduccion deja el mejor en los indices i*(2*BLOCK_SIZE_E_4X) con i = 0, 1, 2....
-	int red_indx = threadIdx.y*blockDim.x*2 + threadIdx.x;
+	int index = threadIdx.y*blockDim.x*2 + threadIdx.x;
 	for (unsigned int s = BLOCK_SIZE_E_4X; s > 0; s >>= 1) {
-		if (threadIdx.x < s && (red_indx + s) < smp.var_all) {
-			if (apz_indx[red_indx + s] >= 0 &&  apz_acc[red_indx + s] < 0 && (apz_indx[red_indx] < 0 || apz_acc[red_indx + s] < apz_acc[red_indx])) {
-				apz_indx[red_indx] = apz_indx[red_indx + s];
-				apz_acc[red_indx] = apz_acc[red_indx + s];
+		if (threadIdx.x < s && (index + s) < smp.var_all) {
+			if (apz_indx[index + s] >= 0 &&  apz_acc[index + s] < 0 && (apz_indx[index] < 0 || apz_acc[index + s] < apz_acc[index])) {
+				apz_indx[index] = apz_indx[index + s];
+				apz_acc[index] = apz_acc[index + s];
 			}
 		}
 		__syncthreads();
@@ -726,7 +726,7 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	
 	// Reduccion Interleaved Addressing para cada 2*BLOCK_SIZE_E_4X 
 	for (unsigned int s = 2*BLOCK_SIZE_E_4X; s < smp.var_all; s *= 2) {
-		int index = 2 * s * thd_indx;
+		index = 2 * s * thd_indx;
 		if ((index + s) < smp.var_all) {
 			if (apz_indx[index + s] >= 0 &&  apz_acc[index + s] < 0 && (apz_indx[index] < 0 || apz_acc[index + s] < apz_acc[index])) {			
 				apz_indx[index]  = apz_indx[index + s];
@@ -735,7 +735,7 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		}
 		__syncthreads();
 	}
-	
+	*/
 	__syncthreads();
 	
 	// Escribir resultado
@@ -776,12 +776,50 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 	
 	__syncthreads();
 	
+	
 	// Reduccion
+	/*
 	// Interleaved Addressing
+	int index;
 	for (unsigned int s = 1; s < smp.rest_fin; s *= 2) {
-		int index = 2 * s * thd_indx;
+		index = 2 * s * thd_indx;
 		if ((index + s) < smp.rest_fin) {			
-			if (apy_indx[index + s] >= 0 &&  apy_acc[index + s]  > -CasiCero_Simplex && (apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index])) {			
+			if (apy_indx[index + s] >= 0 &&  apy_acc[index + s]  > -CasiCero_Simplex && // (apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index])
+				(apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index] || (apy_acc[index + s] == apy_acc[index] && apy_acc[index] > apy_acc[index + s]))
+			) {			
+				apy_indx[index] = apy_indx[index + s];
+				apy_acc[index] = apy_acc[index + s];
+			}
+		}
+		__syncthreads();
+	}
+	
+	__syncthreads();
+	*/
+	
+	// Reduccion Sequencial, esta reduccion deja el mejor en los indices i*(2*BLOCK_SIZE_E_4X) con i = 0, 1, 2....
+	int index = threadIdx.y*blockDim.x*2 + threadIdx.x;
+	for (unsigned int s = BLOCK_SIZE_E_4X; s > 0; s >>= 1) {
+		if (threadIdx.x < s && (index + s) < smp.rest_fin) {
+			if (apy_indx[index + s] >= 0 &&  apy_acc[index + s]  > -CasiCero_Simplex &&
+				(apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index] || (apy_acc[index + s] == apy_acc[index] && apy_indx[index + s] < apy_indx[index]))
+			) {			
+				apy_indx[index] = apy_indx[index + s];
+				apy_acc[index] = apy_acc[index + s];
+			}
+		}
+		__syncthreads();
+	}
+	
+	__syncthreads();
+	
+	// Reduccion Interleaved Addressing para cada 2*BLOCK_SIZE_E_4X 
+	for (unsigned int s = 2*BLOCK_SIZE_E_4X; s < smp.rest_fin; s *= 2) {
+		index = 2 * s * thd_indx;
+		if ((index + s) < smp.rest_fin) {
+			if (apy_indx[index + s] >= 0 &&  apy_acc[index + s]  > -CasiCero_Simplex && 
+				(apy_indx[index] < 0 || apy_acc[index + s] < apy_acc[index] || (apy_acc[index + s] == apy_acc[index] && apy_indx[index + s] < apy_indx[index]))
+			) {			
 				apy_indx[index] = apy_indx[index + s];
 				apy_acc[index] = apy_acc[index + s];
 			}
@@ -902,10 +940,10 @@ void printResult(TSimplexGPUs &smp) {
 			varType = smp.var_type[i];
 			if (varType == 1) {
 				val = bi;
-				printf("s%i = %.12f \n", findVarIndex(smp, i), val);
+				printf("s%i = %f \n", findVarIndex(smp, i), val);
 			} else {
 				val = bi;
-				printf("a - error%i = %.12f\n", findVarIndex(smp, i),  val);
+				printf("a - error%i = %f\n", findVarIndex(smp, i),  val);
 			}
 		}
 	}
@@ -935,7 +973,7 @@ __device__ void printResultDev(TSimplexGPUs &smp) {
 			varType = smp.var_type[i];
 			if (varType == 1) {
 				val = bi;
-				printf("s%i = %.12f \n", findVarIndexDev(smp, i), val);
+				printf("s%i = %.12f\n", findVarIndexDev(smp, i), val);
 			} else {
 				val = bi;
 				printf("a - error%i = %.12f\n", findVarIndexDev(smp, i),  val);
