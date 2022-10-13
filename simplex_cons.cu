@@ -17,7 +17,7 @@ const int MAX_RES = 256; // Esto sera usado para pedir shared memory
 
 // 8 * 32 = 256
 const int BLOCK_SIZE_E_1X = 32;  // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#thread-hierarchy the arrange of the warp in the block is giving for a two-dimensional block of size (Dx, Dy),the thread ID of a thread of index (x, y) is (x + y Dx)
-const int BLOCK_SIZE_E_1Y = 8;
+const int BLOCK_SIZE_E_1Y = 4;
 
 const int BLOCK_SIZE_E_2X = 1;
 const int BLOCK_SIZE_E_2Y = 1;
@@ -694,9 +694,7 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 	// Condicion los hilos en el bloque deben ser mayor o igual que var_all, sino hay que agregar un bucle mas para que se procesen el resto del los valores en la reduccion
 	if (thd_indx == 0 && smp.var_all > 2*thds_in_block) printf("Condicion los hilos en el bloque deben ser mayor o igual que var_all/2 \n");
 	
-	//__syncthreads();
-	
-	
+	// Reduccion
 	// Reduccion Interleaved Addressing, OLD, la siguiente reduccion secuencial mejoro el rendimiento en un 18% aprox.
 	for (unsigned int s = 1; s < smp.var_all; s *= 2) {
 		int index = 2 * s * thd_indx;
@@ -722,7 +720,6 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		__syncthreads();
 	}
 	
-	__syncthreads();
 	
 	// Reduccion Interleaved Addressing para cada 2*BLOCK_SIZE_E_4X 
 	for (unsigned int s = 2*BLOCK_SIZE_E_4X; s < smp.var_all; s *= 2) {
@@ -736,7 +733,6 @@ __device__ void locate_min_dj(TSimplexGPUs &smp, int &zpos) {
 		__syncthreads();
 	}
 	*/
-	__syncthreads();
 	
 	// Escribir resultado
 	if (thd_indx == 0) {
@@ -778,7 +774,6 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 	
 	
 	// Reduccion
-	/*
 	// Interleaved Addressing
 	int index;
 	for (unsigned int s = 1; s < smp.rest_fin; s *= 2) {
@@ -794,9 +789,7 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 		__syncthreads();
 	}
 	
-	__syncthreads();
-	*/
-	
+	/*
 	// Reduccion Sequencial, esta reduccion deja el mejor en los indices i*(2*BLOCK_SIZE_E_4X) con i = 0, 1, 2....
 	int index = threadIdx.y*blockDim.x*2 + threadIdx.x;
 	for (unsigned int s = BLOCK_SIZE_E_4X; s > 0; s >>= 1) {
@@ -811,8 +804,6 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 		__syncthreads();
 	}
 	
-	__syncthreads();
-	
 	// Reduccion Interleaved Addressing para cada 2*BLOCK_SIZE_E_4X 
 	for (unsigned int s = 2*BLOCK_SIZE_E_4X; s < smp.rest_fin; s *= 2) {
 		index = 2 * s * thd_indx;
@@ -826,8 +817,7 @@ __device__ void locate_min_ratio(TSimplexGPUs &smp, int zpos, int &qpos) {
 		}
 		__syncthreads();
 	}
-	
-	__syncthreads();
+	*/
 	
 	// Escribir resultado
 	if (thd_indx == 0) {
@@ -856,7 +846,7 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	
 	__syncthreads(); // because of invPiv =...
 
-	for (j = thd_indx; j <= smp.var_all; j+= block_dim) { // Modifico la fila k
+	for (j = thd_indx; j <= smp.var_all; j+= block_dim) { // Modifico la fila k (Xb inc)
 		smp.mat_ext[ipos + j] *= invPiv;
 	}
 	
@@ -884,7 +874,6 @@ __device__ void intercambiarvars(TSimplexGPUs &smp, int kfil, int jcol) {
 	
 	if (thd_indx == 0) {
 		smp.matriz[ipos + jcol] = 1; // Modifico el pivote
-		smp.Xb[ipos] *= invPiv; // Modifico Xb para la kfila
 		
 		k = smp.top[jcol];
 		smp.top[jcol] = smp.left[ipos];
